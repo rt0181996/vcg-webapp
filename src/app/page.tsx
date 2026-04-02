@@ -184,16 +184,15 @@ export default function VCGApp() {
         {([
           { id:'home',     icon:'🏠', label:'Home'     },
           { id:'register', icon:'➕', label:'Register'  },
-          { id:'import', icon:'📊', label:'Import'  },
-          { id:'qr',       icon:'📲', label:'QR Code'  },
-          { id:'settings', icon:'⚙️', label:'Settings' },
+          { id:'import',   icon:'📊', label:'Import'    },
+          { id:'settings', icon:'⚙️', label:'Settings'  },
         ] as {id:Screen;icon:string;label:string}[]).map(t=>(
-          <button key={t.id} onClick={()=>{ if(t.id==='qr'){ setShowQR(true); return } if(t.id!=='register') setActiveBlock(null); setScreen(t.id) }}
+          <button key={t.id} onClick={()=>{ if(t.id!=='register') setActiveBlock(null); setScreen(t.id) }}
             style={{ background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,padding:'0 12px' }}>
-            <div style={{ width:40,height:40,borderRadius:14,background:(screen===t.id&&t.id!=='qr')?'linear-gradient(135deg,#002970,#00b8a4)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,transition:'all 0.2s' }}>
+            <div style={{ width:40,height:40,borderRadius:14,background:screen===t.id?'linear-gradient(135deg,#002970,#00b8a4)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,transition:'all 0.2s' }}>
               {t.icon}
             </div>
-            <span style={{ fontSize:10,fontWeight:700,color:(screen===t.id&&t.id!=='qr')?C.navy:C.text3 }}>{t.label}</span>
+            <span style={{ fontSize:10,fontWeight:700,color:screen===t.id?C.navy:C.text3 }}>{t.label}</span>
           </button>
         ))}
       </div>
