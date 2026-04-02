@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 const API = 'https://virtual-gateway.onrender.com'
 const APP_URL = 'https://vcg-webapp.vercel.app'
@@ -676,8 +676,8 @@ function HistoryScreen({history,blocks}:any) {
 // ── COST SCREEN ───────────────────────────────────────────────────────────────
 function CostScreen({blocks,sensors,history}:any) {
   const rate=0.38
-  const totalCost=blocks.reduce((s:number,b:Block)=>s++(b.consumption*rate/1000*3600).toFixed(2),0)
-  const totalSavings=blocks.reduce((s:number,b:Block)=>s++(b.generation*rate/1000*3600).toFixed(2),0)
+  const totalCost=blocks.reduce((s:number,b:Block)=>s + parseFloat((b.consumption*rate/1000*3600).toFixed(2)),0)
+  const totalSavings=blocks.reduce((s:number,b:Block)=>s + parseFloat((b.generation*rate/1000*3600).toFixed(2)),0)
   const totalCO2=Object.values(sensors).flat().filter((s:any)=>s.label==='CO₂ Saved').reduce((t:number,s:any)=>t+s.value,0)
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -690,7 +690,7 @@ function CostScreen({blocks,sensors,history}:any) {
         {[
           {icon:'💸',label:'Est. Daily Cost', value:`€${totalCost.toFixed(2)}`,  color:C.red,   bg:'#fef2f2'},
           {icon:'💚',label:'Solar Savings',   value:`€${totalSavings.toFixed(2)}`,color:C.green, bg:'#f0fdf4'},
-          {icon:'🌿',label:'CO₂ Saved Today', value:`${(+totalCO2).toFixed(1)} kg`,color:C.teal||C.cyan, bg:C.cyanLight},
+          {icon:'🌿',label:'CO₂ Saved Today', value:`${(+totalCO2).toFixed(1)} kg`,color:C.cyan, bg:C.cyanLight},
           {icon:'📊',label:'Avg Cost/kWh',    value:`€${rate}/kWh`,             color:C.amber,  bg:'#fffbeb'},
         ].map(s=>(
           <div key={s.label} style={{background:s.bg,borderRadius:18,padding:'18px 16px',border:`1px solid ${s.color}20`}}>
@@ -1153,4 +1153,3 @@ function SettingsScreen({apiOnline,apiMsg,onRefresh,onShowQR,onNavigate}:any) {
 
 function SH({title}:{title:string}){return <div style={{fontWeight:800,fontSize:14,color:C.text,paddingLeft:4}}>{title}</div>}
 // VCG v5 - Thu Apr  2 18:14:30 UTC 2026
- 
