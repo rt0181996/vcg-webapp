@@ -261,14 +261,9 @@ export default function VCGApp() {
 
   const NAV=[
     {id:'home',    icon:'🏠',label:'Home'},
-    {id:'charts',  icon:'📈',label:'Charts',badge:0},
+    {id:'charts',  icon:'📈',label:'Charts'},
     {id:'alerts',  icon:'⚠️',label:'Alerts',badge:unread},
     {id:'demand',  icon:'⚡',label:'Demand'},
-    {id:'history', icon:'📋',label:'History'},
-    {id:'cost',    icon:'💰',label:'Cost'},
-    {id:'devices', icon:'📟',label:'Devices'},
-    {id:'compare', icon:'🏆',label:'Compare'},
-    {id:'map',     icon:'🗺️',label:'Map'},
     {id:'settings',icon:'⚙️',label:'More'},
   ]
 
@@ -311,7 +306,7 @@ export default function VCGApp() {
       </div>
 
       {/* CONTENT */}
-      <div style={{position:'relative',zIndex:1,marginTop:-44,padding:'0 16px 160px'}}>
+      <div style={{position:'relative',zIndex:1,marginTop:-44,padding:'0 16px 120px'}}>
         {screen==='home'    && <HomeScreen     blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} onAddCommunity={()=>setScreen('import')} onNavigate={setScreen} />}
         {screen==='block'   && activeBlock && <BlockDetailScreen block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d)=>{setActiveDevice(d);setScreen('devices')}} />}
         {screen==='charts'  && <ChartsScreen   blocks={blocks} history={history} sensors={sensors} />}
@@ -327,28 +322,16 @@ export default function VCGApp() {
         {screen==='settings'&& <SettingsScreen apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={checkApi} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} />}
       </div>
 
-      {/* 2-ROW IRON MAN NAV */}
-      <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,background:'rgba(255,255,255,0.97)',borderTop:`2px solid ${IM.red}30`,zIndex:50,boxShadow:'0 -4px 24px rgba(230,57,70,0.12)',backdropFilter:'blur(16px)',paddingBottom:6}}>
-        {/* Row 1 */}
-        <div style={{display:'flex',justifyContent:'space-around',paddingTop:8,paddingBottom:6,borderBottom:`1px solid ${IM.border}`}}>
-          {NAV.slice(0,5).map(t=>(
-            <button key={t.id} onClick={()=>{setActiveBlock(null);setScreen(t.id as Screen)}} style={{background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:2,padding:'0 4px',position:'relative'}}>
-              <div style={{width:38,height:38,borderRadius:12,background:screen===t.id?`linear-gradient(135deg,${IM.redDark},${IM.red})`:'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,transition:'all 0.2s',boxShadow:screen===t.id?`0 4px 12px ${IM.red}50`:undefined}}>
+      {/* SINGLE ROW IRON MAN NAV */}
+      <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,background:'rgba(255,255,255,0.97)',borderTop:`2px solid ${IM.red}30`,zIndex:50,boxShadow:'0 -4px 24px rgba(230,57,70,0.12)',backdropFilter:'blur(16px)',padding:'8px 0 18px'}}>
+        <div style={{display:'flex',justifyContent:'space-around'}}>
+          {NAV.map(t=>(
+            <button key={t.id} onClick={()=>{setActiveBlock(null);setScreen(t.id as Screen)}} style={{background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:2,padding:'0 8px',position:'relative'}}>
+              <div style={{width:42,height:42,borderRadius:14,background:screen===t.id?`linear-gradient(135deg,${IM.redDark},${IM.red})`:'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,transition:'all 0.2s',boxShadow:screen===t.id?`0 4px 12px ${IM.red}50`:undefined}}>
                 {t.icon}
               </div>
-              {(t as any).badge>0&&<div style={{position:'absolute',top:0,right:4,width:14,height:14,borderRadius:'50%',background:IM.red,color:'#fff',fontSize:8,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',border:'2px solid #fff'}}>{(t as any).badge}</div>}
-              <span style={{fontSize:9,fontWeight:700,color:screen===t.id?IM.red:IM.text3}}>{t.label}</span>
-            </button>
-          ))}
-        </div>
-        {/* Row 2 */}
-        <div style={{display:'flex',justifyContent:'space-around',paddingTop:6}}>
-          {NAV.slice(5).map(t=>(
-            <button key={t.id} onClick={()=>{setActiveBlock(null);setScreen(t.id as Screen)}} style={{background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:2,padding:'0 4px',position:'relative'}}>
-              <div style={{width:32,height:32,borderRadius:10,background:screen===t.id?`linear-gradient(135deg,${IM.goldDark},${IM.gold})`:'#f8faff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,transition:'all 0.2s',border:`1px solid ${screen===t.id?'transparent':IM.border}`,boxShadow:screen===t.id?`0 4px 10px ${IM.gold}50`:undefined}}>
-                {t.icon}
-              </div>
-              <span style={{fontSize:9,fontWeight:700,color:screen===t.id?IM.goldDark:IM.text3}}>{t.label}</span>
+              {(t as any).badge>0&&<div style={{position:'absolute',top:0,right:6,width:16,height:16,borderRadius:'50%',background:IM.red,color:'#fff',fontSize:9,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',border:'2px solid #fff'}}>{(t as any).badge}</div>}
+              <span style={{fontSize:10,fontWeight:700,color:screen===t.id?IM.red:IM.text3}}>{t.label}</span>
             </button>
           ))}
         </div>
@@ -1079,8 +1062,32 @@ function ImportScreen({blocks,onBack,onBlocksImported,onDevicesImported}:any) {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 function SettingsScreen({apiOnline,apiMsg,onRefresh,onShowQR,onNavigate}:any) {
+  const MORE=[
+    {icon:'📋',label:'History',     s:'history', c:IM.arc},
+    {icon:'💰',label:'Cost & Savings',s:'cost',  c:IM.gold},
+    {icon:'📟',label:'All Devices', s:'devices', c:IM.arc},
+    {icon:'🏆',label:'Compare',     s:'compare', c:IM.gold},
+    {icon:'🗺️',label:'Ireland Map', s:'map',     c:IM.green},
+    {icon:'➕',label:'Register',    s:'register',c:IM.red},
+    {icon:'📊',label:'Import Excel',s:'import',  c:IM.green},
+  ]
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      {/* MORE FEATURES GRID */}
+      <div style={{background:`linear-gradient(135deg,${IM.navy},${IM.navy2})`,borderRadius:24,padding:20,border:`1px solid ${IM.red}20`}}>
+        <div className="orb" style={{fontSize:14,color:IM.gold,marginBottom:14,letterSpacing:1}}>⚙️ More Features</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          {MORE.map(item=>(
+            <button key={item.s} onClick={()=>onNavigate(item.s)}
+              style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:14,cursor:'pointer',textAlign:'left' as const,transition:'all 0.15s'}}
+              onMouseOver={e=>{e.currentTarget.style.background='rgba(255,255,255,0.13)';e.currentTarget.style.borderColor=item.c+'80'}}
+              onMouseOut={e=>{e.currentTarget.style.background='rgba(255,255,255,0.06)';e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'}}>
+              <div style={{width:38,height:38,borderRadius:12,background:item.c+'25',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>{item.icon}</div>
+              <span style={{fontWeight:700,fontSize:13,color:'#fff'}}>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       <div style={{background:`linear-gradient(135deg,${IM.navy},#3d0c0c)`,borderRadius:24,padding:24,color:'#fff',boxShadow:`0 8px 32px ${IM.red}30`,border:`1px solid ${IM.red}30`}}>
         <div style={{width:60,height:60,borderRadius:20,background:`linear-gradient(135deg,${IM.redDark},${IM.red})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,marginBottom:14,boxShadow:`0 4px 16px ${IM.red}50`}}>👨‍💻</div>
         <div className="orb" style={{fontSize:22,color:'#fff'}}>Ronit</div>
