@@ -2,42 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap');
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --cyan: #06b6d4;
-  --cyan-dark: #0891b2;
-  --cyan-light: #ecfeff;
-  --cyan-mid: #a5f3fc;
-  --teal: #14b8a6;
-  --navy: #0f172a;
-  --navy2: #1e293b;
-  --bg: #f0f4ff;
-  --bg2: #e8eef8;
+  --red: #e63946;
+  --red-dark: #c1121f;
+  --red-glow: rgba(230,57,70,0.3);
+  --gold: #ffd60a;
+  --gold-dark: #e5b800;
+  --gold-glow: rgba(255,214,10,0.3);
+  --arc: #58c4dc;
+  --arc-glow: rgba(88,196,220,0.25);
+  --navy: #0d1117;
+  --navy2: #161b22;
+  --navy3: #21262d;
+  --bg: #f4f5fa;
   --card: #ffffff;
-  --card2: #f8faff;
-  --text: #0f172a;
-  --text2: #475569;
-  --text3: #94a3b8;
-  --border: #e2e8f0;
+  --text: #0d1117;
+  --text2: #4a5568;
+  --text3: #9aa5b4;
+  --border: #e2e6f0;
   --green: #10b981;
-  --green-light: #d1fae5;
-  --red: #ef4444;
-  --red-light: #fee2e2;
-  --orange: #f97316;
+  --green-l: #d1fae5;
   --amber: #f59e0b;
-  --amber-light: #fef3c7;
-  --blue: #3b82f6;
-  --blue-light: #dbeafe;
-  --purple: #8b5cf6;
-  --purple-light: #ede9fe;
-  --pink: #ec4899;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-lg: 0 10px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
-  --shadow-cyan: 0 4px 20px rgba(6,182,212,0.25);
+  --amber-l: #fef3c7;
+  --shadow: 0 4px 20px rgba(230,57,70,0.1);
 }
 
 body {
@@ -48,62 +39,40 @@ body {
 }
 
 .mono { font-family: 'Share Tech Mono', monospace; }
+.orb  { font-family: 'Orbitron', monospace; }
 
-/* Animated background */
 body::before {
   content: '';
   position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 280px;
-  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 40%, #0891b2 100%);
-  z-index: 0;
-  pointer-events: none;
+  top: 0; left: 0; right: 0; height: 280px;
+  background: linear-gradient(135deg, #0d1117 0%, #1a0a0a 40%, #2d0a0a 70%, #3d1200 100%);
+  z-index: 0; pointer-events: none;
 }
-
-/* Subtle dot pattern on bg */
 body::after {
   content: '';
-  position: fixed;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(6,182,212,0.06) 1px, transparent 1px);
-  background-size: 28px 28px;
-  z-index: 0;
-  pointer-events: none;
+  position: fixed; inset: 0;
+  background-image: radial-gradient(circle, rgba(230,57,70,0.04) 1px, transparent 1px);
+  background-size: 28px 28px; z-index: 0; pointer-events: none;
 }
 
-@keyframes slideUp   { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-@keyframes fadeIn    { from{opacity:0} to{opacity:1} }
-@keyframes spin      { to{transform:rotate(360deg)} }
-@keyframes pulse     { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.6)} }
-@keyframes shimmer   { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
-@keyframes glow      { 0%,100%{box-shadow:0 0 8px rgba(6,182,212,0.4)} 50%{box-shadow:0 0 24px rgba(6,182,212,0.8)} }
-@keyframes countUp   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-@keyframes bounceIn  { 0%{transform:scale(0.8);opacity:0} 70%{transform:scale(1.05)} 100%{transform:scale(1);opacity:1} }
+@keyframes slideUp  { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+@keyframes fadeIn   { from{opacity:0} to{opacity:1} }
+@keyframes spin     { to{transform:rotate(360deg)} }
+@keyframes pulseRed { 0%,100%{opacity:1} 50%{opacity:0.5} }
+@keyframes barGrow  { from{height:0;opacity:0} to{opacity:1} }
+@keyframes arcPulse { 0%,100%{box-shadow:0 0 8px rgba(88,196,220,0.5)} 50%{box-shadow:0 0 24px rgba(88,196,220,0.9),0 0 48px rgba(88,196,220,0.3)} }
+@keyframes goldGlow { 0%,100%{text-shadow:0 0 8px rgba(255,214,10,0.5)} 50%{text-shadow:0 0 20px rgba(255,214,10,0.9)} }
 
-.su  { animation: slideUp  0.4s ease forwards; }
-.fi  { animation: fadeIn   0.3s ease forwards; }
-.bi  { animation: bounceIn 0.5s ease forwards; }
+.su  { animation: slideUp 0.4s ease forwards; }
+.fi  { animation: fadeIn  0.3s ease forwards; }
 .spin-anim { animation: spin 1s linear infinite; }
-.glow-anim { animation: glow 2s ease-in-out infinite; }
-.pulse-dot { animation: pulse 2s ease-in-out infinite; }
+.arc-pulse { animation: arcPulse 2s ease-in-out infinite; }
+.pulse-dot { animation: pulseRed 1.5s ease-in-out infinite; }
 
-.d1{animation-delay:.05s;opacity:0} .d2{animation-delay:.10s;opacity:0}
-.d3{animation-delay:.15s;opacity:0} .d4{animation-delay:.20s;opacity:0}
-.d5{animation-delay:.25s;opacity:0} .d6{animation-delay:.30s;opacity:0}
-.d7{animation-delay:.35s;opacity:0} .d8{animation-delay:.40s;opacity:0}
-
-/* Shimmer skeleton */
-.shimmer {
-  background: linear-gradient(90deg, #f0f4ff 25%, #e2e8f0 50%, #f0f4ff 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
-}
+.d1{animation-delay:.05s;opacity:0}.d2{animation-delay:.10s;opacity:0}
+.d3{animation-delay:.15s;opacity:0}.d4{animation-delay:.20s;opacity:0}
+.d5{animation-delay:.25s;opacity:0}.d6{animation-delay:.30s;opacity:0}
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--cyan-mid); border-radius: 4px; }
-
-/* Chart bars */
-@keyframes barGrow { from{transform:scaleY(0)} to{transform:scaleY(1)} }
-.bar-grow { transform-origin: bottom; animation: barGrow 0.8s ease forwards; }
+::-webkit-scrollbar-thumb { background: var(--red); border-radius: 4px; }
