@@ -1153,3 +1153,4 @@ function SettingsScreen({apiOnline,apiMsg,onRefresh,onShowQR,onNavigate}:any) {
 
 function SH({title}:{title:string}){return <div style={{fontWeight:800,fontSize:14,color:C.text,paddingLeft:4}}>{title}</div>}
 // VCG v5 - Thu Apr  2 18:14:30 UTC 2026
+ 
