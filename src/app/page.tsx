@@ -199,11 +199,11 @@ export default function VCGApp() {
   const inp=(x?:React.CSSProperties):React.CSSProperties=>({width:'100%',padding:'11px 14px',border:`1.5px solid ${T.border}`,borderRadius:12,fontSize:14,fontFamily:'Plus Jakarta Sans,sans-serif',color:T.text,background:T.card2,outline:'none',...x})
 
   return (
-    <div style={{maxWidth:430,margin:'0 auto',minHeight:'100vh',fontFamily:'Plus Jakarta Sans,sans-serif',background:T.bg,position:'relative',transition:'background 0.3s'}}>
+    <div style={{maxWidth:'100%',minHeight:'100vh',fontFamily:'Plus Jakarta Sans,sans-serif',background:T.bg,position:'relative',transition:'background 0.3s',display:'flex',flexDirection:'column'}}>
 
       {/* Offline Banner */}
       {isOffline&&(
-        <div style={{position:'fixed',top:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,background:`linear-gradient(135deg,${T.amber},#d97706)`,padding:'8px 16px',display:'flex',alignItems:'center',gap:8,zIndex:200}}>
+        <div style={{position:'fixed',top:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:900,background:`linear-gradient(135deg,${T.amber},#d97706)`,padding:'8px 16px',display:'flex',alignItems:'center',gap:8,zIndex:200}}>
           <span style={{fontSize:16}}>📴</span>
           <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'#000',fontWeight:700}}>OFFLINE MODE — Using cached data</span>
         </div>
@@ -247,7 +247,7 @@ export default function VCGApp() {
 
       {/* NOTIFICATION PANEL */}
       {showNotifPanel&&(
-        <div style={{position:'fixed',top:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,height:'100vh',background:'rgba(0,0,0,0.5)',zIndex:150,backdropFilter:'blur(4px)'}} onClick={()=>setShowNotifPanel(false)}>
+        <div style={{position:'fixed',top:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:900,height:'100vh',background:'rgba(0,0,0,0.5)',zIndex:150,backdropFilter:'blur(4px)'}} onClick={()=>setShowNotifPanel(false)}>
           <div style={{position:'absolute',top:0,right:0,width:'85%',height:'100%',background:T.card,boxShadow:'-8px 0 32px rgba(0,0,0,0.3)',overflowY:'auto',padding:20}} onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
               <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,color:T.red,fontWeight:700}}>🔔 Notifications</div>
@@ -275,7 +275,7 @@ export default function VCGApp() {
       )}
 
       {/* CONTENT */}
-      <div style={{position:'relative',zIndex:1,marginTop:-44,padding:'0 16px 120px'}}>
+      <div style={{position:'relative',zIndex:1,marginTop:-44,padding:'0 16px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%'}}>
         {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onNavigate={setScreen} darkMode={darkMode} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='charts'    && <ChartsScreen    T={T} blocks={blocks} history={history} sensors={sensors} cardStyle={cardStyle} darkMode={darkMode} />}
@@ -294,7 +294,7 @@ export default function VCGApp() {
       </div>
 
       {/* BOTTOM NAV */}
-      <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,background:darkMode?'rgba(22,27,34,0.97)':'rgba(255,255,255,0.97)',borderTop:`2px solid ${T.red}30`,zIndex:50,boxShadow:'0 -4px 24px rgba(230,57,70,0.15)',backdropFilter:'blur(16px)',padding:'8px 0 18px'}}>
+      <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:900,background:darkMode?'rgba(22,27,34,0.97)':'rgba(255,255,255,0.97)',borderTop:`2px solid ${T.red}30`,zIndex:50,boxShadow:'0 -4px 24px rgba(230,57,70,0.15)',backdropFilter:'blur(16px)',padding:'8px 0 18px'}}>
         <div style={{display:'flex',justifyContent:'space-around'}}>
           {NAV.map(t=>(
             <button key={t.id} onClick={()=>{setActiveBlock(null);setScreen(t.id as Screen)}} style={{background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:2,padding:'0 8px',position:'relative'}}>
@@ -471,12 +471,10 @@ function HomeScreen({T,blocks,onBlockClick,apiOnline,apiMsg,alerts,isOffline,onA
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
 function ChartsScreen({T,blocks,history,sensors,cardStyle,darkMode}:any) {
-  const [chartType,setChartType]=useState<ChartType>('bar')
   const [selBlock,setSelBlock]=useState('ALL')
   const recentH=selBlock==='ALL'?(history['BLK-A']||[]).slice(-8):(history[selBlock]||[]).slice(-8)
   const genData=recentH.map((h:HistoryEntry)=>+h.generation)
   const conData=recentH.map((h:HistoryEntry)=>+h.consumption)
-  const TYPES=[{id:'bar',icon:'📊',label:'Bar'},{id:'line',icon:'📈',label:'Line'},{id:'area',icon:'🌊',label:'Area'},{id:'donut',icon:'🍩',label:'Donut'},{id:'radar',icon:'🎯',label:'H-Bar'}]
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
       <div style={{...cardStyle({background:darkMode?'linear-gradient(135deg,#0d1117,#161b22)':'linear-gradient(135deg,#0d1117,#1a0a0a)',border:'none'})}}>
@@ -490,15 +488,19 @@ function ChartsScreen({T,blocks,history,sensors,cardStyle,darkMode}:any) {
         {['ALL',...blocks.map((b:Block)=>b.id)].map((id:string)=>{const b=blocks.find((x:Block)=>x.id===id);return <button key={id} onClick={()=>setSelBlock(id)} style={{flexShrink:0,padding:'6px 14px',borderRadius:20,border:`2px solid ${selBlock===id?(b?.color||T.arc):T.border}`,background:selBlock===id?(b?.color||T.arc)+'20':T.card,fontWeight:700,fontSize:11,color:selBlock===id?(b?.color||T.arc):T.text3,cursor:'pointer',whiteSpace:'nowrap'}}>{id==='ALL'?'All':b?.name||id}</button>})}
       </div>
       <div style={cardStyle()}>
-        <div style={{display:'flex',justifyContent:'space-between',marginBottom:16}}>
-          <div style={{fontWeight:800,fontSize:14,color:T.text}}>{chartType==='bar'?'Gen vs Con':chartType==='line'?'Generation Trend':chartType==='area'?'Net Balance':chartType==='donut'?'Distribution':'Block Performance'}</div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <div style={{fontWeight:800,fontSize:14,color:T.text}}>Generation vs Consumption (kW)</div>
           <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>{new Date().toLocaleTimeString()}</div>
         </div>
-        {chartType==='bar'&&<><BarChart data={recentH.map((h:HistoryEntry)=>({label:h.time,values:[+h.generation,+h.consumption]}))} colors={[T.green,T.red]} height={110} T={T}/><div style={{display:'flex',gap:16,justifyContent:'center',marginTop:10}}>{[{c:T.green,l:'Generation'},{c:T.red,l:'Consumption'}].map(x=><div key={x.l} style={{display:'flex',alignItems:'center',gap:6}}><div style={{width:12,height:12,borderRadius:3,background:x.c}}/><span style={{fontSize:11,color:T.text2,fontWeight:600}}>{x.l}</span></div>)}</div></>}
-        {chartType==='line'&&<><div style={{fontSize:11,color:T.text2,marginBottom:6,fontWeight:600}}>⚡ Generation (kW)</div><LineChart data={genData} color={T.green} height={90} T={T}/><div style={{fontSize:11,color:T.text2,margin:'12px 0 6px',fontWeight:600}}>🔌 Consumption (kW)</div><LineChart data={conData} color={T.red} height={90} T={T}/></>}
-        {chartType==='area'&&<><div style={{fontSize:11,color:T.text2,marginBottom:6,fontWeight:600}}>📊 Net Energy Balance (kW)</div><LineChart data={recentH.map((h:HistoryEntry)=>+h.net)} color={T.arc} height={110} T={T}/></>}
-        {chartType==='donut'&&<><DonutChart segments={blocks.map((b:Block)=>({label:b.name,value:b.generation,color:b.color}))} size={160} T={T}/><div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center',marginTop:12}}>{blocks.map((b:Block)=><div key={b.id} style={{display:'flex',alignItems:'center',gap:6}}><div style={{width:10,height:10,borderRadius:2,background:b.color}}/><span style={{fontSize:11,color:T.text2}}>{b.name}: <strong style={{color:b.color}}>{b.generation.toFixed(1)}</strong></span></div>)}</div></>}
-        {chartType==='radar'&&<HBarChart data={blocks.map((b:Block)=>({label:b.name,value:b.generation,max:Math.max(...blocks.map((x:Block)=>x.generation)),color:b.color}))} T={T}/>}
+        <BarChart data={recentH.map((h:HistoryEntry)=>({label:h.time,values:[+h.generation,+h.consumption]}))} colors={[T.green,T.red]} height={130} T={T}/>
+        <div style={{display:'flex',gap:20,justifyContent:'center',marginTop:12}}>
+          {[{c:T.green,l:'Generation'},{c:T.red,l:'Consumption'}].map(x=>(
+            <div key={x.l} style={{display:'flex',alignItems:'center',gap:6}}>
+              <div style={{width:14,height:14,borderRadius:3,background:x.c}}/>
+              <span style={{fontSize:12,color:T.text2,fontWeight:600}}>{x.l}</span>
+            </div>
+          ))}
+        </div>
       </div>
       <div style={cardStyle()}>
         <div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:14}}>Block Efficiency</div>
@@ -909,26 +911,130 @@ function AlertsScreen({T,alerts,onMarkRead,onMarkAll,cardStyle,pill}:any) {
 // ── DEMAND ────────────────────────────────────────────────────────────────────
 function DemandScreen({T,blocks,apiOnline,cardStyle,pill,goldBtn}:any) {
   const [triggered,setTriggered]=useState<string[]>([])
-  const [events,setEvents]=useState([{id:'DR-001',block:'BLK-B',type:'Load Reduction',target:15,duration:30,status:'Active',time:'10:42'},{id:'DR-002',block:'BLK-A',type:'Peak Shaving',target:10,duration:60,status:'Scheduled',time:'14:00'}])
-  const trigger=(id:string)=>{setTriggered(p=>[...p,id]);setEvents(p=>[...p,{id:'DR-'+Date.now(),block:id,type:'Manual DR',target:20,duration:15,status:'Active',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}]);setTimeout(()=>setTriggered(p=>p.filter(x=>x!==id)),3000)}
+  const [targetPct,setTargetPct]=useState(15)
+  const [duration,setDuration]=useState(30)
+  const [drType,setDrType]=useState('Load Reduction')
+  const [events,setEvents]=useState([
+    {id:'DR-001',block:'BLK-B',type:'Load Reduction',target:15,duration:30,status:'Active',time:'10:42'},
+    {id:'DR-002',block:'BLK-A',type:'Peak Shaving',target:10,duration:60,status:'Scheduled',time:'14:00'}
+  ])
+
+  const trigger=(blockId:string)=>{
+    setTriggered(p=>[...p,blockId])
+    setEvents(p=>[...p,{
+      id:'DR-'+Date.now(),block:blockId,type:drType,
+      target:targetPct,duration:duration,status:'Active',
+      time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+    }])
+    setTimeout(()=>setTriggered(p=>p.filter(x=>x!==blockId)),3000)
+  }
+
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
       <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#161b22)',border:'none'})}}>
         <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#ffd60a'}}>⚡ Demand Response</div>
         <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>IEEE 2030.5 DR Events</div>
       </div>
+
+      {/* DR Configuration */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:16}}>⚙️ Configure DR Event</div>
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          {/* DR Type */}
+          <div>
+            <label style={{fontSize:12,fontWeight:700,color:T.text2,display:'block',marginBottom:8}}>Event Type</label>
+            <div style={{display:'flex',gap:8}}>
+              {['Load Reduction','Peak Shaving','Frequency Response'].map(t=>(
+                <button key={t} onClick={()=>setDrType(t)}
+                  style={{flex:1,padding:'8px 6px',borderRadius:10,border:`2px solid ${drType===t?T.gold:T.border}`,background:drType===t?T.gold+'18':T.bg,fontWeight:700,fontSize:11,color:drType===t?T.gold:T.text2,cursor:'pointer'}}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Target % slider */}
+          <div>
+            <label style={{fontSize:12,fontWeight:700,color:T.text2,display:'block',marginBottom:6}}>
+              Target Energy Reduction: <span style={{fontFamily:"'Orbitron',monospace",color:T.red,fontSize:14}}>{targetPct}%</span>
+            </label>
+            <input type="range" min={5} max={50} step={5} value={targetPct}
+              onChange={e=>setTargetPct(+e.target.value)}
+              style={{width:'100%',accentColor:T.red,height:6,cursor:'pointer'}}
+            />
+            <div style={{display:'flex',justifyContent:'space-between',marginTop:4}}>
+              <span style={{fontSize:10,color:T.text3}}>5% (Low)</span>
+              <span style={{fontSize:10,color:T.text3}}>25% (Medium)</span>
+              <span style={{fontSize:10,color:T.text3}}>50% (High)</span>
+            </div>
+          </div>
+
+          {/* Duration slider */}
+          <div>
+            <label style={{fontSize:12,fontWeight:700,color:T.text2,display:'block',marginBottom:6}}>
+              Duration: <span style={{fontFamily:"'Orbitron',monospace",color:T.arc,fontSize:14}}>{duration} min</span>
+            </label>
+            <input type="range" min={15} max={120} step={15} value={duration}
+              onChange={e=>setDuration(+e.target.value)}
+              style={{width:'100%',accentColor:T.arc,height:6,cursor:'pointer'}}
+            />
+            <div style={{display:'flex',justifyContent:'space-between',marginTop:4}}>
+              <span style={{fontSize:10,color:T.text3}}>15 min</span>
+              <span style={{fontSize:10,color:T.text3}}>60 min</span>
+              <span style={{fontSize:10,color:T.text3}}>120 min</span>
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div style={{background:T.bg,borderRadius:12,padding:'12px 14px',border:`1px solid ${T.border}`}}>
+            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3,marginBottom:8,letterSpacing:1}}>EVENT PREVIEW</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+              {[{l:'Type',v:drType.split(' ')[0]},{l:'Target',v:targetPct+'%'},{l:'Duration',v:duration+' min'}].map(r=>(
+                <div key={r.l} style={{textAlign:'center'}}>
+                  <div style={{fontWeight:800,fontSize:14,color:T.text}}>{r.v}</div>
+                  <div style={{fontSize:10,color:T.text3,marginTop:2}}>{r.l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <SH T={T} title="Active Events" />
       {events.map(e=>(
         <div key={e.id} style={cardStyle({border:`1.5px solid ${e.status==='Active'?T.gold:T.border}`})}>
-          <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}><div><div style={{fontWeight:800,fontSize:14,color:T.text}}>{e.type}</div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>{e.id}</div></div><div style={pill(e.status==='Active'?T.gold:T.arc)}>{e.status}</div></div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>{[{l:'Target',v:e.target+'%'},{l:'Duration',v:e.duration+' min'},{l:'Time',v:e.time}].map(r=><div key={r.l} style={{background:T.bg,borderRadius:10,padding:'8px',textAlign:'center'}}><div style={{fontWeight:800,fontSize:14,color:T.text}}>{r.v}</div><div style={{fontSize:10,color:T.text3}}>{r.l}</div></div>)}</div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
+            <div><div style={{fontWeight:800,fontSize:14,color:T.text}}>{e.type}</div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>{e.id}</div></div>
+            <div style={pill(e.status==='Active'?T.gold:T.arc)}>{e.status}</div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+            {[{l:'Target',v:e.target+'%'},{l:'Duration',v:e.duration+' min'},{l:'Time',v:e.time}].map(r=>(
+              <div key={r.l} style={{background:T.bg,borderRadius:10,padding:'8px',textAlign:'center'}}>
+                <div style={{fontWeight:800,fontSize:14,color:r.l==='Target'?T.red:r.l==='Duration'?T.arc:T.text}}>{r.v}</div>
+                <div style={{fontSize:10,color:T.text3}}>{r.l}</div>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
-      <SH T={T} title="Manual Trigger" />
+
+      <SH T={T} title="Trigger for Block" />
       {blocks.map((b:Block)=>(
         <div key={b.id} style={{...cardStyle(),display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:20}}>{b.emoji}</span><div><div style={{fontWeight:700,fontSize:13,color:T.text}}>{b.name}</div><div style={pill(b.status==='Surplus'?T.green:b.status==='Deficit'?T.red:T.arc)}>{b.status}</div></div></div>
-          <button onClick={()=>trigger(b.id)} disabled={triggered.includes(b.id)} style={{background:triggered.includes(b.id)?T.green:`linear-gradient(135deg,#e5b800,#ffd60a)`,color:triggered.includes(b.id)?'#fff':'#0d1117',border:'none',borderRadius:10,padding:'8px 14px',fontWeight:700,fontSize:12,cursor:'pointer'}}>{triggered.includes(b.id)?'✓ Sent':'Trigger DR'}</button>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:20}}>{b.emoji}</span>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,color:T.text}}>{b.name} — {b.location}</div>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginTop:2}}>
+                <div style={pill(b.status==='Surplus'?T.green:b.status==='Deficit'?T.red:T.arc)}>{b.status}</div>
+                <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>{b.net>=0?'+':''}{b.net.toFixed(1)} kW</span>
+              </div>
+            </div>
+          </div>
+          <button onClick={()=>trigger(b.id)} disabled={triggered.includes(b.id)}
+            style={{background:triggered.includes(b.id)?T.green:`linear-gradient(135deg,#e5b800,#ffd60a)`,color:triggered.includes(b.id)?'#fff':'#0d1117',border:'none',borderRadius:10,padding:'8px 14px',fontWeight:700,fontSize:12,cursor:'pointer',boxShadow:triggered.includes(b.id)?'none':`0 4px 12px ${T.gold}40`}}>
+            {triggered.includes(b.id)?'✓ Sent':'▶ Trigger'}
+          </button>
         </div>
       ))}
     </div>
