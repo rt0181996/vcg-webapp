@@ -63,11 +63,11 @@ const INIT_DEVICES:Device[]=[
 
 // ── Theme tokens ──────────────────────────────────────────────────────────────
 const DARK = {
-  bg:'#0d1117', bg2:'#161b22', card:'#161b22', card2:'#21262d',
-  text:'#e6edf3', text2:'#8b949e', text3:'#484f58',
-  border:'#30363d', red:'#e63946', gold:'#ffd60a', arc:'#58c4dc',
+  bg:'#0a0c10', bg2:'#0d1117', card:'#13181f', card2:'#1a2030',
+  text:'#f0e6d3', text2:'#a89880', text3:'#5a4a38',
+  border:'rgba(255,214,10,0.15)', red:'#e63946', gold:'#ffd60a', arc:'#58c4dc',
   green:'#10b981', amber:'#f59e0b', navy:'#0d1117',
-  redLight:'rgba(230,57,70,0.15)', goldLight:'rgba(255,214,10,0.12)',
+  redLight:'rgba(230,57,70,0.18)', goldLight:'rgba(255,214,10,0.15)',
   arcLight:'rgba(88,196,220,0.12)', greenL:'rgba(16,185,129,0.12)',
   amberL:'rgba(245,158,11,0.12)',
 }
@@ -197,16 +197,18 @@ export default function VCGApp() {
 
   // CSS-in-JS theme helpers
   const cardStyle=(x?:React.CSSProperties):React.CSSProperties=>({
-    background:darkMode?'rgba(22,27,34,0.85)':'rgba(255,255,255,0.9)',
-    backdropFilter:'blur(12px)',
-    WebkitBackdropFilter:'blur(12px)',
+    background:darkMode?'rgba(19,24,31,0.92)':'rgba(255,255,255,0.92)',
+    backdropFilter:'blur(16px)',
+    WebkitBackdropFilter:'blur(16px)',
     borderRadius:20,padding:20,
-    boxShadow:darkMode?'0 8px 32px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.05)':'0 8px 32px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.8)',
-    border:darkMode?'1px solid rgba(255,255,255,0.08)':`1px solid ${T.border}`,
+    boxShadow:darkMode
+      ?'0 8px 32px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,214,10,0.05),0 0 0 1px rgba(255,214,10,0.08)'
+      :'0 8px 32px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.9)',
+    border:darkMode?'1px solid rgba(255,214,10,0.12)':`1px solid ${T.border}`,
     ...x
   })
-  const ironBtn=(x?:React.CSSProperties):React.CSSProperties=>({background:`linear-gradient(135deg,#c1121f,#e63946)`,color:'#fff',border:'none',borderRadius:14,padding:'13px',fontWeight:800,fontSize:14,cursor:'pointer',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 16px rgba(230,57,70,0.4)',...x})
-  const goldBtn=(x?:React.CSSProperties):React.CSSProperties=>({background:`linear-gradient(135deg,#e5b800,#ffd60a)`,color:T.navy,border:'none',borderRadius:14,padding:'13px',fontWeight:800,fontSize:14,cursor:'pointer',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 16px rgba(255,214,10,0.4)',...x})
+  const ironBtn=(x?:React.CSSProperties):React.CSSProperties=>({background:`linear-gradient(135deg,#8b0000,#c1121f,#e63946)`,color:'#fff',border:'none',borderRadius:14,padding:'13px',fontWeight:800,fontSize:14,cursor:'pointer',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 20px rgba(230,57,70,0.5),inset 0 1px 0 rgba(255,255,255,0.1)',letterSpacing:0.5,...x})
+  const goldBtn=(x?:React.CSSProperties):React.CSSProperties=>({background:`linear-gradient(135deg,#b8860b,#e5b800,#ffd60a)`,color:'#0d1117',border:'none',borderRadius:14,padding:'13px',fontWeight:800,fontSize:14,cursor:'pointer',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 20px rgba(255,214,10,0.4),inset 0 1px 0 rgba(255,255,255,0.2)',letterSpacing:0.5,...x})
   const pill=(color:string):React.CSSProperties=>({fontFamily:"'Share Tech Mono',monospace",fontSize:10,letterSpacing:1.5,padding:'3px 10px',borderRadius:20,textTransform:'uppercase' as const,background:color+'25',border:`1px solid ${color}60`,color})
   const lbl:React.CSSProperties={fontSize:12,fontWeight:700,color:T.text2,display:'block',marginBottom:6}
   const inp=(x?:React.CSSProperties):React.CSSProperties=>({width:'100%',padding:'11px 14px',border:`1.5px solid ${T.border}`,borderRadius:12,fontSize:14,fontFamily:'Plus Jakarta Sans,sans-serif',color:T.text,background:T.card2,outline:'none',...x})
@@ -426,101 +428,172 @@ function CircularGauge({value,max,label,unit,color,size=90}:{value:number;max:nu
 
 // ── ENERGY FLOW ANIMATION ─────────────────────────────────────────────────────
 function EnergyFlow({blocks,T}:{blocks:any[];T:any}) {
-  const surplus=blocks.filter(b=>b.status==='Surplus')
-  const deficit=blocks.filter(b=>b.status==='Deficit')
+  const surplus=blocks.filter((b:any)=>b.status==='Surplus')
+  const deficit=blocks.filter((b:any)=>b.status==='Deficit')
   if(!surplus.length||!deficit.length) return null
+
+  // Layout constants - each block card is 110w x 44h with 12px gap
+  const CARD_W=110, CARD_H=44, GAP=14
+  const leftX=0, rightX=230
+  const centerX=170, centerY=Math.max(surplus.length,deficit.length)*(CARD_H+GAP)/2
+  const totalH=Math.max(surplus.length,deficit.length)*(CARD_H+GAP)+20
+  const viewH=Math.max(totalH,140)
+
+  const blockY=(i:number,total:number)=>{
+    const totalBlock=total*(CARD_H+GAP)-GAP
+    const startY=(viewH-totalBlock)/2
+    return startY+i*(CARD_H+GAP)
+  }
+
   return (
-    <div style={{...{background:T.card,borderRadius:20,padding:20,boxShadow:'0 4px 16px rgba(0,0,0,0.07)',border:`1px solid ${T.border}`}}}>
-      <div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
-        <span>⚡</span> Live Energy Flow
-        <div style={{marginLeft:'auto',fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>Real-time transfer</div>
+    <div style={{background:'rgba(13,17,23,0.9)',borderRadius:20,padding:20,
+      border:'1px solid rgba(255,214,10,0.2)',
+      boxShadow:'0 8px 32px rgba(230,57,70,0.1)'}}>
+      <div style={{fontWeight:800,fontSize:14,color:'#fff',marginBottom:16,
+        display:'flex',alignItems:'center',gap:8}}>
+        <span style={{color:'#ffd60a',fontSize:18}}>⚡</span>
+        <span style={{fontFamily:"'Orbitron',monospace",letterSpacing:1}}>Live Energy Flow</span>
+        <div style={{marginLeft:'auto',fontFamily:"'Share Tech Mono',monospace",
+          fontSize:10,color:'rgba(255,214,10,0.5)'}}>Real-time transfer</div>
       </div>
-      <svg width="100%" viewBox="0 0 340 120" style={{overflow:'visible'}}>
+
+      <svg width="100%" viewBox={`0 0 340 ${viewH}`}
+        style={{display:'block',overflow:'visible'}}>
         <defs>
-          <marker id="flowArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M2 1L8 5L2 9" fill="none" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round"/>
+          <marker id="fwdArrow" viewBox="0 0 10 10" refX="8" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="#ffd60a"
+              strokeWidth="1.8" strokeLinecap="round"/>
           </marker>
-          <marker id="flowArrowR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M2 1L8 5L2 9" fill="none" stroke="#e63946" strokeWidth="1.5" strokeLinecap="round"/>
+          <marker id="defArrow" viewBox="0 0 10 10" refX="8" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="#e63946"
+              strokeWidth="1.8" strokeLinecap="round"/>
           </marker>
-          {surplus.map((_,i)=>(
-            <linearGradient key={i} id={`flow${i}`} x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.8"/>
-              <stop offset="100%" stopColor="#ffd60a" stopOpacity="0.8"/>
+          {surplus.map((_:any,i:number)=>(
+            <linearGradient key={i} id={`lg${i}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#e63946" stopOpacity="0.9"/>
+              <stop offset="100%" stopColor="#ffd60a" stopOpacity="0.9"/>
             </linearGradient>
           ))}
         </defs>
 
-        {/* Surplus blocks on left */}
-        {surplus.slice(0,3).map((b,i)=>(
-          <g key={b.id}>
-            <rect x={0} y={i*36+8} width={90} height={28} rx={8}
-              fill={b.color+'20'} stroke={b.color} strokeWidth={1.5}/>
-            <text x={45} y={i*36+26} textAnchor="middle" fontSize="10"
-              fontWeight="700" fill={b.color} fontFamily="Plus Jakarta Sans,sans-serif">{b.name}</text>
-            <text x={45} y={i*36+37} textAnchor="middle" fontSize="8"
-              fill="#10b981" fontFamily="Share Tech Mono,monospace">+{b.net.toFixed(1)}kW</text>
-          </g>
-        ))}
+        {/* ── SURPLUS BLOCKS (left) ── */}
+        {surplus.slice(0,4).map((b:any,i:number)=>{
+          const y=blockY(i,Math.min(surplus.length,4))
+          const midY=y+CARD_H/2
+          return (
+            <g key={b.id}>
+              {/* Card background */}
+              <rect x={leftX} y={y} width={CARD_W} height={CARD_H} rx={10}
+                fill={b.color+'15'} stroke={b.color} strokeWidth={1.5}/>
+              {/* Block name - inside card top half */}
+              <text x={leftX+CARD_W/2} y={y+17} textAnchor="middle"
+                fontSize="11" fontWeight="700" fill={b.color}
+                fontFamily="Plus Jakarta Sans,sans-serif">{b.name}</text>
+              {/* kW value - inside card bottom half */}
+              <text x={leftX+CARD_W/2} y={y+33} textAnchor="middle"
+                fontSize="10" fontWeight="700" fill="#ffd60a"
+                fontFamily="'Share Tech Mono',monospace">
+                +{b.net.toFixed(1)} kW
+              </text>
+              {/* Connector dot */}
+              <circle cx={leftX+CARD_W+2} cy={midY} r={4}
+                fill="#ffd60a" stroke="#0d1117" strokeWidth={1.5}/>
+              {/* Flow line to center */}
+              <path d={`M${leftX+CARD_W+6} ${midY} C${centerX-40} ${midY} ${centerX-40} ${centerY} ${centerX-22} ${centerY}`}
+                fill="none" stroke={`url(#lg${i})`} strokeWidth={2}
+                markerEnd="url(#fwdArrow)"/>
+              {/* Animated dot on path */}
+              <circle r={3.5} fill="#ffd60a" opacity={0.9}>
+                <animateMotion dur={`${1.4+i*0.25}s`} repeatCount="indefinite">
+                  <mpath href={`#sp${i}`}/>
+                </animateMotion>
+              </circle>
+              <path id={`sp${i}`}
+                d={`M${leftX+CARD_W+6} ${midY} C${centerX-40} ${midY} ${centerX-40} ${centerY} ${centerX-22} ${centerY}`}
+                fill="none"/>
+            </g>
+          )
+        })}
 
-        {/* Center hub */}
-        <circle cx={170} cy={55} r={22} fill="#0d1117" stroke="#ffd60a" strokeWidth={2}/>
-        <circle cx={170} cy={55} r={14} fill="none" stroke="#58c4dc" strokeWidth={1.5}
-          strokeDasharray="4,3">
+        {/* ── CENTER HUB ── */}
+        {/* Outer glow ring */}
+        <circle cx={centerX} cy={centerY} r={28}
+          fill="none" stroke="rgba(255,214,10,0.15)" strokeWidth={8}/>
+        {/* Gold ring */}
+        <circle cx={centerX} cy={centerY} r={24}
+          fill="#0d1117" stroke="#ffd60a" strokeWidth={2}/>
+        {/* Spinning arc reactor ring */}
+        <circle cx={centerX} cy={centerY} r={17}
+          fill="none" stroke="#e63946" strokeWidth={1.5}
+          strokeDasharray="6,3">
           <animateTransform attributeName="transform" type="rotate"
-            from="0 170 55" to="360 170 55" dur="4s" repeatCount="indefinite"/>
+            from={`0 ${centerX} ${centerY}`} to={`360 ${centerX} ${centerY}`}
+            dur="3s" repeatCount="indefinite"/>
         </circle>
-        <text x={170} y={51} textAnchor="middle" fontSize="8"
-          fill="#ffd60a" fontFamily="Share Tech Mono,monospace" fontWeight="700">VCG</text>
-        <text x={170} y={62} textAnchor="middle" fontSize="7"
-          fill="rgba(255,255,255,0.6)" fontFamily="Share Tech Mono,monospace">GRID</text>
+        {/* Inner blue ring */}
+        <circle cx={centerX} cy={centerY} r={11}
+          fill="none" stroke="#58c4dc" strokeWidth={1}
+          strokeDasharray="3,2">
+          <animateTransform attributeName="transform" type="rotate"
+            from={`360 ${centerX} ${centerY}`} to={`0 ${centerX} ${centerY}`}
+            dur="5s" repeatCount="indefinite"/>
+        </circle>
+        {/* Center fill */}
+        <circle cx={centerX} cy={centerY} r={9}
+          fill="radial-gradient(circle,#58c4dc,#0d4f6e)"/>
+        <circle cx={centerX} cy={centerY} r={9} fill="#0d1117"/>
+        <text x={centerX} y={centerY-3} textAnchor="middle" fontSize="7"
+          fill="#ffd60a" fontFamily="'Orbitron',monospace" fontWeight="700">VCG</text>
+        <text x={centerX} y={centerY+7} textAnchor="middle" fontSize="6"
+          fill="rgba(88,196,220,0.8)" fontFamily="'Share Tech Mono',monospace">GRID</text>
 
-        {/* Deficit blocks on right */}
-        {deficit.slice(0,3).map((b,i)=>(
-          <g key={b.id}>
-            <rect x={250} y={i*36+8} width={90} height={28} rx={8}
-              fill={b.color+'20'} stroke={b.color} strokeWidth={1.5}/>
-            <text x={295} y={i*36+26} textAnchor="middle" fontSize="10"
-              fontWeight="700" fill={b.color} fontFamily="Plus Jakarta Sans,sans-serif">{b.name}</text>
-            <text x={295} y={i*36+37} textAnchor="middle" fontSize="8"
-              fill="#e63946" fontFamily="Share Tech Mono,monospace">{b.net.toFixed(1)}kW</text>
-          </g>
-        ))}
-
-        {/* Animated flow lines */}
-        {surplus.slice(0,3).map((b,i)=>(
-          <g key={b.id+'-flow'}>
-            <path d={`M92 ${i*36+22} C130 ${i*36+22} 130 55 148 55`}
-              fill="none" stroke={`url(#flow${i})`} strokeWidth={2}
-              markerEnd="url(#flowArrow)"/>
-            <circle r={4} fill="#10b981" opacity={0.9}>
-              <animateMotion dur={`${1.5+i*0.3}s`} repeatCount="indefinite">
-                <mpath xlinkHref={`#flowPath${i}`}/>
-              </animateMotion>
-            </circle>
-            <path id={`flowPath${i}`} d={`M92 ${i*36+22} C130 ${i*36+22} 130 55 148 55`} fill="none"/>
-          </g>
-        ))}
-
-        {/* Lines to deficit */}
-        {deficit.slice(0,3).map((b,i)=>(
-          <path key={b.id+'-out'} d={`M192 55 C210 55 210 ${i*36+22} 248 ${i*36+22}`}
-            fill="none" stroke="#e63946" strokeWidth={1.5} strokeDasharray="4,3"
-            markerEnd="url(#flowArrowR)" opacity={0.7}/>
-        ))}
+        {/* ── DEFICIT BLOCKS (right) ── */}
+        {deficit.slice(0,4).map((b:any,i:number)=>{
+          const y=blockY(i,Math.min(deficit.length,4))
+          const midY=y+CARD_H/2
+          return (
+            <g key={b.id}>
+              {/* Flow line from center */}
+              <path d={`M${centerX+22} ${centerY} C${centerX+40} ${centerY} ${centerX+40} ${midY} ${rightX-2} ${midY}`}
+                fill="none" stroke="#e63946" strokeWidth={1.8}
+                strokeDasharray="5,3" markerEnd="url(#defArrow)" opacity={0.85}/>
+              {/* Card background */}
+              <rect x={rightX} y={y} width={CARD_W} height={CARD_H} rx={10}
+                fill={b.color+'15'} stroke={b.color} strokeWidth={1.5}/>
+              {/* Block name */}
+              <text x={rightX+CARD_W/2} y={y+17} textAnchor="middle"
+                fontSize="11" fontWeight="700" fill={b.color}
+                fontFamily="Plus Jakarta Sans,sans-serif">{b.name}</text>
+              {/* kW value - inside card */}
+              <text x={rightX+CARD_W/2} y={y+33} textAnchor="middle"
+                fontSize="10" fontWeight="700" fill="#e63946"
+                fontFamily="'Share Tech Mono',monospace">
+                {b.net.toFixed(1)} kW
+              </text>
+            </g>
+          )
+        })}
       </svg>
 
-      <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:8}}>
-        {[{c:'#10b981',l:`${surplus.length} Surplus → VCG`},{c:'#e63946',l:`VCG → ${deficit.length} Deficit`}].map(x=>(
+      {/* Legend */}
+      <div style={{display:'flex',gap:20,justifyContent:'center',marginTop:12,
+        paddingTop:12,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+        {[
+          {c:'#ffd60a',l:`${Math.min(surplus.length,4)} Surplus → VCG`},
+          {c:'#e63946',l:`VCG → ${Math.min(deficit.length,4)} Deficit`},
+        ].map(x=>(
           <div key={x.l} style={{display:'flex',alignItems:'center',gap:6}}>
             <div style={{width:12,height:12,borderRadius:2,background:x.c}}/>
-            <span style={{fontSize:11,color:T.text2,fontWeight:600}}>{x.l}</span>
+            <span style={{fontSize:11,color:'rgba(255,255,255,0.6)',fontWeight:600}}>{x.l}</span>
           </div>
         ))}
       </div>
     </div>
   )
 }
+
 
 // ── ANIMATED NUMBER COUNTER ──────────────────────────────────────────────────
 function AnimatedNumber({value,decimals=1,color,fontSize=18,suffix=''}:{value:number;decimals?:number;color:string;fontSize?:number;suffix?:string}) {
