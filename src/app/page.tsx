@@ -105,6 +105,12 @@ export default function VCGApp() {
   const [notifications,setNotifications]=useState<Notification[]>([])
   const [history,setHistory]=useState<Record<string,HistoryEntry[]>>({'BLK-A':makeHistory('BLK-A'),'BLK-B':makeHistory('BLK-B'),'BLK-C':makeHistory('BLK-C'),'BLK-D':makeHistory('BLK-D')})
   const [showQR,setShowQR]=useState(false)
+  const [loading,setLoading]=useState(true)
+
+  useEffect(()=>{
+    const t=setTimeout(()=>setLoading(false), 2800)
+    return ()=>clearTimeout(t)
+  },[])
   const [showNotifPanel,setShowNotifPanel]=useState(false)
   const [copied,setCopied]=useState(false)
 
@@ -190,12 +196,73 @@ export default function VCGApp() {
   ]
 
   // CSS-in-JS theme helpers
-  const cardStyle=(x?:React.CSSProperties):React.CSSProperties=>({background:T.card,borderRadius:20,padding:20,boxShadow:darkMode?'0 4px 16px rgba(0,0,0,0.3)':'0 4px 16px rgba(0,0,0,0.07)',border:`1px solid ${T.border}`,...x})
+  const cardStyle=(x?:React.CSSProperties):React.CSSProperties=>({
+    background:darkMode?'rgba(22,27,34,0.85)':'rgba(255,255,255,0.9)',
+    backdropFilter:'blur(12px)',
+    WebkitBackdropFilter:'blur(12px)',
+    borderRadius:20,padding:20,
+    boxShadow:darkMode?'0 8px 32px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.05)':'0 8px 32px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.8)',
+    border:darkMode?'1px solid rgba(255,255,255,0.08)':`1px solid ${T.border}`,
+    ...x
+  })
   const ironBtn=(x?:React.CSSProperties):React.CSSProperties=>({background:`linear-gradient(135deg,#c1121f,#e63946)`,color:'#fff',border:'none',borderRadius:14,padding:'13px',fontWeight:800,fontSize:14,cursor:'pointer',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 16px rgba(230,57,70,0.4)',...x})
   const goldBtn=(x?:React.CSSProperties):React.CSSProperties=>({background:`linear-gradient(135deg,#e5b800,#ffd60a)`,color:T.navy,border:'none',borderRadius:14,padding:'13px',fontWeight:800,fontSize:14,cursor:'pointer',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 16px rgba(255,214,10,0.4)',...x})
   const pill=(color:string):React.CSSProperties=>({fontFamily:"'Share Tech Mono',monospace",fontSize:10,letterSpacing:1.5,padding:'3px 10px',borderRadius:20,textTransform:'uppercase' as const,background:color+'25',border:`1px solid ${color}60`,color})
   const lbl:React.CSSProperties={fontSize:12,fontWeight:700,color:T.text2,display:'block',marginBottom:6}
   const inp=(x?:React.CSSProperties):React.CSSProperties=>({width:'100%',padding:'11px 14px',border:`1.5px solid ${T.border}`,borderRadius:12,fontSize:14,fontFamily:'Plus Jakarta Sans,sans-serif',color:T.text,background:T.card2,outline:'none',...x})
+
+  if(loading) return (
+    <div style={{position:'fixed',inset:0,background:'#0d1117',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:9999,fontFamily:'Plus Jakarta Sans,sans-serif'}}>
+      <style>{`
+        @keyframes arcSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        @keyframes arcPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(0.95)}}
+        @keyframes arcGlow{0%,100%{box-shadow:0 0 20px rgba(88,196,220,0.5),0 0 60px rgba(88,196,220,0.2)}50%{box-shadow:0 0 40px rgba(88,196,220,0.9),0 0 100px rgba(88,196,220,0.4)}}
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+        @keyframes loadBar{from{width:0}to{width:100%}}
+        @keyframes particleFloat{0%{transform:translateY(0px) translateX(0px);opacity:0.8}50%{transform:translateY(-20px) translateX(10px);opacity:0.4}100%{transform:translateY(0px) translateX(0px);opacity:0.8}}
+      `}</style>
+
+      {/* Particles */}
+      {[...Array(12)].map((_,i)=>(
+        <div key={i} style={{position:'absolute',width:3,height:3,borderRadius:'50%',background:'#58c4dc',opacity:0.6,
+          top:`${10+Math.sin(i*30)*40}%`,left:`${10+Math.cos(i*30)*40}%`,
+          animation:`particleFloat ${2+i*0.3}s ease-in-out infinite`,animationDelay:`${i*0.2}s`}}/>
+      ))}
+
+      {/* Arc Reactor */}
+      <div style={{position:'relative',width:140,height:140,marginBottom:32,animation:'arcGlow 2s ease-in-out infinite'}}>
+        {/* Outer ring */}
+        <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'2px solid rgba(88,196,220,0.3)',animation:'arcSpin 8s linear infinite'}}/>
+        {/* Spinning ring */}
+        <div style={{position:'absolute',inset:8,borderRadius:'50%',border:'3px solid transparent',borderTopColor:'#58c4dc',borderRightColor:'#58c4dc',animation:'arcSpin 2s linear infinite'}}/>
+        {/* Second ring */}
+        <div style={{position:'absolute',inset:16,borderRadius:'50%',border:'2px solid transparent',borderTopColor:'#e63946',animation:'arcSpin 3s linear infinite reverse'}}/>
+        {/* Third ring */}
+        <div style={{position:'absolute',inset:24,borderRadius:'50%',border:'2px solid rgba(255,214,10,0.5)',animation:'arcSpin 6s linear infinite'}}/>
+        {/* Core */}
+        <div style={{position:'absolute',inset:32,borderRadius:'50%',background:'radial-gradient(circle,#58c4dc,#0d4f6e)',animation:'arcPulse 1.5s ease-in-out infinite',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{color:'#fff',fontSize:28}}>⚡</div>
+        </div>
+        {/* Hex marks */}
+        {[0,60,120,180,240,300].map(angle=>(
+          <div key={angle} style={{position:'absolute',width:8,height:8,borderRadius:2,background:'#58c4dc',opacity:0.7,
+            top:`${50-46*Math.cos(angle*Math.PI/180)}%`,left:`${50+46*Math.sin(angle*Math.PI/180)}%`,transform:'translate(-50%,-50%)'}}/>
+        ))}
+      </div>
+
+      {/* Title */}
+      <div style={{fontFamily:"'Orbitron',monospace",fontSize:22,fontWeight:900,color:'#fff',letterSpacing:4,animation:'fadeInUp 0.6s ease forwards',marginBottom:6}}>VCG PORTAL</div>
+      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'#ffd60a',letterSpacing:3,animation:'fadeInUp 0.6s ease 0.2s forwards',opacity:0,marginBottom:4}}>MI6228 · GROUP 13</div>
+      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'rgba(88,196,220,0.7)',letterSpacing:2,animation:'fadeInUp 0.6s ease 0.4s forwards',opacity:0,marginBottom:32}}>IEEE 2030.5 · FIWARE · IDS DATASPACE</div>
+
+      {/* Loading bar */}
+      <div style={{width:200,height:3,background:'rgba(255,255,255,0.1)',borderRadius:2,overflow:'hidden',marginBottom:12}}>
+        <div style={{height:'100%',background:'linear-gradient(90deg,#e63946,#ffd60a,#58c4dc)',borderRadius:2,animation:'loadBar 2.5s ease forwards'}}/>
+      </div>
+      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'rgba(88,196,220,0.6)',letterSpacing:2,animation:'blink 1s ease-in-out infinite'}}>INITIALIZING GATEWAY...</div>
+    </div>
+  )
 
   return (
     <div style={{maxWidth:'100%',minHeight:'100vh',fontFamily:'Plus Jakarta Sans,sans-serif',background:T.bg,position:'relative',transition:'background 0.3s',display:'flex',flexDirection:'column'}}>
@@ -235,9 +302,9 @@ export default function VCGApp() {
           </div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginTop:18}}>
-          {[{l:'Generation',v:totalGen.toFixed(1),c:'#ffd60a'},{l:'Consumption',v:totalCon.toFixed(1),c:'#ff6b6b'},{l:'Net',v:(totalNet>=0?'+':'')+totalNet,c:totalNet>=0?'#ffd60a':'#e63946'}].map(s=>(
+          {[{l:'Generation',v:totalGen,c:'#ffd60a'},{l:'Consumption',v:totalCon,c:'#ff6b6b'},{l:'Net',v:totalNet,c:totalNet>=0?'#ffd60a':'#e63946'}].map(s=>(
             <div key={s.l} style={{background:'rgba(255,255,255,0.08)',borderRadius:14,padding:'12px 8px',textAlign:'center',backdropFilter:'blur(8px)',border:'1px solid rgba(255,214,10,0.15)'}}>
-              <div style={{fontFamily:"'Orbitron',monospace",fontSize:18,fontWeight:900,color:s.c,lineHeight:1}}>{s.v}</div>
+              <AnimatedNumber value={s.v} color={s.c} fontSize={18} />
               <div style={{fontSize:8,color:'rgba(255,255,255,0.5)',fontWeight:700,marginTop:3,textTransform:'uppercase',letterSpacing:0.8}}>{s.l} kW</div>
             </div>
           ))}
@@ -274,7 +341,7 @@ export default function VCGApp() {
       )}
 
       {/* CONTENT */}
-      <div style={{position:'relative',zIndex:1,padding:'0 16px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%'}}>
+      <div style={{position:'relative',zIndex:1,padding:'0 16px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%',animation:'pageEnter 0.4s ease'}} key={screen}>
         {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onNavigate={setScreen} darkMode={darkMode} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='charts'    && <ChartsScreen    T={T} blocks={blocks} history={history} sensors={sensors} cardStyle={cardStyle} darkMode={darkMode} />}
@@ -323,8 +390,167 @@ export default function VCGApp() {
           </div>
         </div>
       )}
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes barGrow{from{height:0;opacity:0}to{opacity:1}} @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}`}</style>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes countPop{0%{transform:scale(1.2);opacity:0.7}100%{transform:scale(1);opacity:1}} @keyframes pageEnter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}} @keyframes barGrow{from{height:0;opacity:0}to{opacity:1}} @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}`}</style>
     </div>
+  )
+}
+
+// ── CIRCULAR GAUGE ────────────────────────────────────────────────────────────
+function CircularGauge({value,max,label,unit,color,size=90}:{value:number;max:number;label:string;unit:string;color:string;size?:number}) {
+  const pct=Math.min(value/max,1)
+  const r=(size/2)-8
+  const circ=2*Math.PI*r
+  const dash=circ*pct
+  const gap=circ-dash
+  const cx=size/2, cy=size/2
+  return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+      <div style={{position:'relative',width:size,height:size}}>
+        <svg width={size} height={size} style={{transform:'rotate(-90deg)'}}>
+          {/* Track */}
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={6}/>
+          {/* Progress */}
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={6}
+            strokeLinecap="round" strokeDasharray={`${dash} ${gap}`}
+            style={{transition:'stroke-dasharray 1s ease',filter:`drop-shadow(0 0 4px ${color}80)`}}/>
+        </svg>
+        <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:size*0.18,fontWeight:700,color,lineHeight:1}}>{value}</div>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:size*0.1,color:'rgba(255,255,255,0.5)',marginTop:2}}>{unit}</div>
+        </div>
+      </div>
+      <div style={{fontSize:10,color:'rgba(255,255,255,0.6)',fontWeight:600,textAlign:'center',maxWidth:size}}>{label}</div>
+    </div>
+  )
+}
+
+// ── ENERGY FLOW ANIMATION ─────────────────────────────────────────────────────
+function EnergyFlow({blocks,T}:{blocks:any[];T:any}) {
+  const surplus=blocks.filter(b=>b.status==='Surplus')
+  const deficit=blocks.filter(b=>b.status==='Deficit')
+  if(!surplus.length||!deficit.length) return null
+  return (
+    <div style={{...{background:T.card,borderRadius:20,padding:20,boxShadow:'0 4px 16px rgba(0,0,0,0.07)',border:`1px solid ${T.border}`}}}>
+      <div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
+        <span>⚡</span> Live Energy Flow
+        <div style={{marginLeft:'auto',fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>Real-time transfer</div>
+      </div>
+      <svg width="100%" viewBox="0 0 340 120" style={{overflow:'visible'}}>
+        <defs>
+          <marker id="flowArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round"/>
+          </marker>
+          <marker id="flowArrowR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="#e63946" strokeWidth="1.5" strokeLinecap="round"/>
+          </marker>
+          {surplus.map((_,i)=>(
+            <linearGradient key={i} id={`flow${i}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.8"/>
+              <stop offset="100%" stopColor="#ffd60a" stopOpacity="0.8"/>
+            </linearGradient>
+          ))}
+        </defs>
+
+        {/* Surplus blocks on left */}
+        {surplus.slice(0,3).map((b,i)=>(
+          <g key={b.id}>
+            <rect x={0} y={i*36+8} width={90} height={28} rx={8}
+              fill={b.color+'20'} stroke={b.color} strokeWidth={1.5}/>
+            <text x={45} y={i*36+26} textAnchor="middle" fontSize="10"
+              fontWeight="700" fill={b.color} fontFamily="Plus Jakarta Sans,sans-serif">{b.name}</text>
+            <text x={45} y={i*36+37} textAnchor="middle" fontSize="8"
+              fill="#10b981" fontFamily="Share Tech Mono,monospace">+{b.net.toFixed(1)}kW</text>
+          </g>
+        ))}
+
+        {/* Center hub */}
+        <circle cx={170} cy={55} r={22} fill="#0d1117" stroke="#ffd60a" strokeWidth={2}/>
+        <circle cx={170} cy={55} r={14} fill="none" stroke="#58c4dc" strokeWidth={1.5}
+          strokeDasharray="4,3">
+          <animateTransform attributeName="transform" type="rotate"
+            from="0 170 55" to="360 170 55" dur="4s" repeatCount="indefinite"/>
+        </circle>
+        <text x={170} y={51} textAnchor="middle" fontSize="8"
+          fill="#ffd60a" fontFamily="Share Tech Mono,monospace" fontWeight="700">VCG</text>
+        <text x={170} y={62} textAnchor="middle" fontSize="7"
+          fill="rgba(255,255,255,0.6)" fontFamily="Share Tech Mono,monospace">GRID</text>
+
+        {/* Deficit blocks on right */}
+        {deficit.slice(0,3).map((b,i)=>(
+          <g key={b.id}>
+            <rect x={250} y={i*36+8} width={90} height={28} rx={8}
+              fill={b.color+'20'} stroke={b.color} strokeWidth={1.5}/>
+            <text x={295} y={i*36+26} textAnchor="middle" fontSize="10"
+              fontWeight="700" fill={b.color} fontFamily="Plus Jakarta Sans,sans-serif">{b.name}</text>
+            <text x={295} y={i*36+37} textAnchor="middle" fontSize="8"
+              fill="#e63946" fontFamily="Share Tech Mono,monospace">{b.net.toFixed(1)}kW</text>
+          </g>
+        ))}
+
+        {/* Animated flow lines */}
+        {surplus.slice(0,3).map((b,i)=>(
+          <g key={b.id+'-flow'}>
+            <path d={`M92 ${i*36+22} C130 ${i*36+22} 130 55 148 55`}
+              fill="none" stroke={`url(#flow${i})`} strokeWidth={2}
+              markerEnd="url(#flowArrow)"/>
+            <circle r={4} fill="#10b981" opacity={0.9}>
+              <animateMotion dur={`${1.5+i*0.3}s`} repeatCount="indefinite">
+                <mpath xlinkHref={`#flowPath${i}`}/>
+              </animateMotion>
+            </circle>
+            <path id={`flowPath${i}`} d={`M92 ${i*36+22} C130 ${i*36+22} 130 55 148 55`} fill="none"/>
+          </g>
+        ))}
+
+        {/* Lines to deficit */}
+        {deficit.slice(0,3).map((b,i)=>(
+          <path key={b.id+'-out'} d={`M192 55 C210 55 210 ${i*36+22} 248 ${i*36+22}`}
+            fill="none" stroke="#e63946" strokeWidth={1.5} strokeDasharray="4,3"
+            markerEnd="url(#flowArrowR)" opacity={0.7}/>
+        ))}
+      </svg>
+
+      <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:8}}>
+        {[{c:'#10b981',l:`${surplus.length} Surplus → VCG`},{c:'#e63946',l:`VCG → ${deficit.length} Deficit`}].map(x=>(
+          <div key={x.l} style={{display:'flex',alignItems:'center',gap:6}}>
+            <div style={{width:12,height:12,borderRadius:2,background:x.c}}/>
+            <span style={{fontSize:11,color:T.text2,fontWeight:600}}>{x.l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── ANIMATED NUMBER COUNTER ──────────────────────────────────────────────────
+function AnimatedNumber({value,decimals=1,color,fontSize=18,suffix=''}:{value:number;decimals?:number;color:string;fontSize?:number;suffix?:string}) {
+  const [display,setDisplay]=useState(0)
+  const [key,setKey]=useState(0)
+  const prevRef=useRef(0)
+
+  useEffect(()=>{
+    const start=prevRef.current
+    const end=value
+    const diff=end-start
+    if(Math.abs(diff)<0.01){setDisplay(value);return}
+    const steps=20
+    const stepTime=600/steps
+    let step=0
+    const timer=setInterval(()=>{
+      step++
+      const progress=step/steps
+      const eased=1-Math.pow(1-progress,3)
+      setDisplay(+(start+diff*eased).toFixed(decimals))
+      if(step>=steps){setDisplay(end);prevRef.current=end;clearInterval(timer)}
+    },stepTime)
+    return ()=>clearInterval(timer)
+  },[value])
+
+  return (
+    <span style={{fontFamily:"'Orbitron',monospace",fontSize,fontWeight:700,color,
+      animation:'countPop 0.3s ease',display:'inline-block'}}>
+      {display.toFixed(decimals)}{suffix}
+    </span>
   )
 }
 
@@ -439,6 +665,9 @@ function HomeScreen({T,blocks,onBlockClick,apiOnline,apiMsg,alerts,isOffline,onA
         <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13,color:T.red}}>{unread} Active Alert{unread>1?'s':''}</div><div style={{fontSize:11,color:T.text2}}>Tap to view</div></div>
         <span style={{fontSize:18,color:T.red}}>›</span>
       </div>}
+      {/* Energy Flow Animation */}
+      <EnergyFlow blocks={blocks} T={T} />
+
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <div><div style={{fontWeight:900,fontSize:17,color:T.text}}>Energy Communities</div><div style={{fontSize:12,color:T.text2,marginTop:1}}>{blocks.length} blocks · tap to explore</div></div>
         <button onClick={onAddCommunity} style={ironBtn({width:'auto',padding:'9px 16px',fontSize:12})}>＋ Add</button>
@@ -537,6 +766,15 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,
       </div>
       {recentH.length>0&&<><SH T={T} title="Energy Trend" /><div style={cardStyle({padding:'14px 10px'})}><BarChart data={recentH.map((h:HistoryEntry)=>({label:h.time,values:[+h.generation,+h.consumption]}))} colors={[T.green,T.red]} height={90} T={T}/></div></>}
       <SH T={T} title="Sensor Parameters" />
+      {/* Circular gauges for key sensors */}
+      <div style={cardStyle({})}>
+        <div style={{fontWeight:700,fontSize:12,color:T.text2,marginBottom:16,fontFamily:"'Share Tech Mono',monospace",letterSpacing:1,textTransform:'uppercase'}}>Key Metrics</div>
+        <div style={{display:'flex',justifyContent:'space-around',flexWrap:'wrap',gap:12}}>
+          {sensors.slice(0,4).map((s:Sensor)=>(
+            <CircularGauge key={s.label} value={+s.value} max={s.label==='Temperature'?50:s.label==='Solar Irradiance'?1000:s.label==='Battery SOC'?100:10} label={s.label} unit={s.unit} color={s.color} size={88}/>
+          ))}
+        </div>
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
         {sensors.map((s:Sensor,i:number)=>(
           <div key={s.label} style={cardStyle({padding:'14px 16px'})}>
