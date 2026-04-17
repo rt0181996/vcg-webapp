@@ -1759,107 +1759,6 @@ function ImportScreen({T,blocks,onBack,onBlocksImported,onDevicesImported,cardSt
   )
 }
 
-// ── SETTINGS ──────────────────────────────────────────────────────────────────
-function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,darkMode,onToggleDark,isOffline,cardStyle,ironBtn,goldBtn}:any) {
-  const MORE=[
-    {icon:'📋',label:'History',     s:'history', c:T.arc},
-    {icon:'💰',label:'Cost',        s:'cost',    c:'#ffd60a'},
-    {icon:'📟',label:'Devices',     s:'devices', c:T.arc},
-    {icon:'🏆',label:'Compare',     s:'compare', c:'#ffd60a'},
-    {icon:'🗺️',label:'Map',         s:'map',     c:T.green},
-    {icon:'🤖',label:'Simulator',   s:'simulator',c:T.red},
-    {icon:'🔥',label:'FIWARE',      s:'fiware',  c:T.arc},
-    {icon:'🏗️',label:'Architecture', s:'architecture',c:'#ffd60a'},
-    {icon:'📄',label:'PDF Report',   s:'report',  c:T.red},
-    {icon:'🎬',label:'Demo Mode',    s:'demo',    c:'#ffd60a'},
-    {icon:'🔗',label:'NGSI Import',   s:'ngsi',    c:'#58c4dc'},
-    {icon:'➕',label:'Register',    s:'register',c:T.red},
-    {icon:'📊',label:'Import Excel',s:'import',  c:T.green},
-  ]
-  return (
-    <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      {/* MORE GRID */}
-      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#161b22)',border:`1px solid ${T.red}20`})}}>
-        <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,color:'#ffd60a',marginBottom:14,letterSpacing:1}}>⚙️ More Features</div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-          {MORE.map(item=>(
-            <button key={item.s} onClick={()=>item.s==='demo'?onStartDemo():onNavigate(item.s)} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:14,cursor:'pointer',textAlign:'left' as const,transition:'all 0.15s'}}
-              onMouseOver={e=>{e.currentTarget.style.background='rgba(255,255,255,0.13)';e.currentTarget.style.borderColor=item.c+'80'}}
-              onMouseOut={e=>{e.currentTarget.style.background='rgba(255,255,255,0.06)';e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'}}>
-              <div style={{width:38,height:38,borderRadius:12,background:item.c+'25',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>{item.icon}</div>
-              <span style={{fontWeight:700,fontSize:13,color:'#fff'}}>{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Profile */}
-      <div style={{background:`linear-gradient(135deg,#0d1117,#3d0c0c)`,borderRadius:24,padding:24,color:'#fff',boxShadow:`0 8px 32px ${T.red}30`,border:`1px solid ${T.red}30`}}>
-        <div style={{width:60,height:60,borderRadius:20,background:`linear-gradient(135deg,#c1121f,#e63946)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,marginBottom:14,boxShadow:`0 4px 16px ${T.red}50`}}>👨‍💻</div>
-        <div style={{fontFamily:"'Orbitron',monospace",fontSize:22,color:'#fff'}}>Ronit</div>
-        <div style={{fontSize:12,color:'rgba(255,255,255,0.6)',marginTop:3}}>Virtual Communication Gateway</div>
-        <div style={{display:'flex',gap:8,marginTop:16,flexWrap:'wrap'}}>
-          {[{l:'Student',v:'MI6228'},{l:'Group',v:'13'},{l:'Mentor',v:'Paolo C.'},{l:'Protocol',v:'IEEE 2030.5'}].map(x=>(
-            <div key={x.l} style={{background:'rgba(255,255,255,0.08)',borderRadius:10,padding:'6px 12px',border:`1px solid ${T.red}30`}}>
-              <div style={{fontSize:8,color:'rgba(255,255,255,0.4)',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:1.2}}>{x.l}</div>
-              <div style={{fontSize:13,fontWeight:800,color:'#ffd60a'}}>{x.v}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Theme toggle */}
-      <div style={cardStyle()}>
-        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14}}>🎨 Appearance</div>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:T.bg,borderRadius:14,border:`1px solid ${T.border}`}}>
-          <div style={{display:'flex',alignItems:'center',gap:12}}>
-            <span style={{fontSize:24}}>{darkMode?'🌙':'☀️'}</span>
-            <div><div style={{fontWeight:700,fontSize:14,color:T.text}}>{darkMode?'Iron Man Dark':'Light Mode'}</div><div style={{fontSize:12,color:T.text2}}>Tap to switch theme</div></div>
-          </div>
-          <button onClick={onToggleDark} style={{background:darkMode?`linear-gradient(135deg,#c1121f,#e63946)`:`linear-gradient(135deg,#e5b800,#ffd60a)`,color:darkMode?'#fff':'#0d1117',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:700,fontSize:12,cursor:'pointer'}}>
-            {darkMode?'Switch to Light':'Switch to Dark'}
-          </button>
-        </div>
-      </div>
-
-      {/* Offline status */}
-      <div style={cardStyle()}>
-        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14}}>📶 Connection</div>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 14px',background:T.bg,borderRadius:12,marginBottom:10,border:`1px solid ${isOffline?T.amber:T.green}30`}}>
-          <div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:20}}>{isOffline?'📴':'📶'}</span><div><div style={{fontWeight:700,fontSize:13,color:T.text}}>{isOffline?'Offline Mode':'Online'}</div><div style={{fontSize:11,color:T.text2}}>{isOffline?'Using cached data':'All systems operational'}</div></div></div>
-          <div style={{width:10,height:10,borderRadius:'50%',background:isOffline?T.amber:T.green,boxShadow:`0 0 8px ${isOffline?T.amber:T.green}`}} />
-        </div>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 14px',background:T.bg,borderRadius:12,marginBottom:10,border:`1px solid ${T.border}`}}>
-          <div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:T.text2}}>virtual-gateway.onrender.com</div>{apiMsg&&<div style={{fontSize:11,color:apiOnline?T.green:T.red,marginTop:2}}>{apiMsg}</div>}</div>
-          <div style={{display:'flex',alignItems:'center',gap:5}}><div style={{width:8,height:8,borderRadius:'50%',background:apiOnline===null?T.amber:apiOnline?T.green:T.red}}/><span style={{fontSize:11,fontWeight:700,color:apiOnline===null?T.amber:apiOnline?T.green:T.red}}>{apiOnline===null?'Checking':apiOnline?'Online':'Offline'}</span></div>
-        </div>
-        <button onClick={onRefresh} style={ironBtn()}>↺ Refresh Connection</button>
-      </div>
-
-      {/* QR */}
-      <div style={cardStyle()}>
-        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14}}>📲 Share App</div>
-        <div style={{display:'flex',alignItems:'center',gap:14}}>
-          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=88x88&data=${encodeURIComponent(APP_URL)}&color=c1121f&bgcolor=ffffff&qzone=1`} width={88} height={88} alt="QR" style={{borderRadius:12,border:`2px solid ${T.red}`,boxShadow:`0 0 16px ${T.red}30`}} />
-          <div style={{flex:1}}><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:T.red,marginBottom:4}}>vcg-webapp.vercel.app</div><div style={{fontSize:12,color:T.text2,marginBottom:10}}>Scan to open on any device</div><button onClick={onShowQR} style={ironBtn({padding:'9px 16px',width:'auto',fontSize:12})}>📲 Full QR</button></div>
-        </div>
-      </div>
-
-      {/* Links */}
-      <div style={cardStyle()}>
-        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14}}>🔗 Quick Links</div>
-        {[{icon:'🚀',l:'Live API Docs',sub:'virtual-gateway.onrender.com/docs',href:API+'/docs'},{icon:'💻',l:'GitHub',sub:'rt0181996/virtual-gateway',href:'https://github.com/rt0181996/virtual-gateway'},{icon:'📊',l:'Grafana',sub:'localhost:3000',href:'http://localhost:3000'},{icon:'🌐',l:'IDS Dataspace',sub:'localhost:8181',href:'http://localhost:8181'}].map((x,i)=>(
-          <a key={x.l} href={x.href} target="_blank" rel="noopener" style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0',borderBottom:i<3?`1px solid ${T.border}`:'none',textDecoration:'none'}}>
-            <div style={{width:38,height:38,borderRadius:12,background:T.redLight,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>{x.icon}</div>
-            <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:T.text}}>{x.l}</div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>{x.sub}</div></div>
-            <span style={{color:T.text3,fontSize:18}}>›</span>
-          </a>
-        ))}
-      </div>
-      <div style={{textAlign:'center',padding:8,fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3,letterSpacing:1.5}}>VCG v7.0 · IRON MAN EDITION ⚡</div>
-    </div>
-  )
-}
 
 function SH({T,title}:{T:any;title:string}){return <div style={{fontWeight:800,fontSize:14,color:T.text,paddingLeft:4}}>{title}</div>}
 
@@ -2402,8 +2301,6 @@ function NGSIScreen({T,blocks,onBlocksImported,cardStyle,ironBtn}:any) {
 }
 
 // ── UPDATE SETTINGS: Add PIN, Demo, Health Monitor ────────────────────────────
-// Override SettingsScreen to add new features
-const _SettingsScreenOrig = SettingsScreen
 function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStartDemo,darkMode,onToggleDark,isOffline,cardStyle,ironBtn,goldBtn,pinLocked,savedPin,onPinChange,endpointHealth}:any) {
   const [pinInput,setPinInput]=useState('')
   const [pinMode,setPinMode]=useState<'view'|'set'|'change'>('view')
