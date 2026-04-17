@@ -14,7 +14,7 @@ interface Alert { id:string;block:string;type:string;message:string;severity:'hi
 interface HistoryEntry { time:string;block:string;generation:number;consumption:number;net:number;cost:number }
 interface Notification { id:string;title:string;message:string;type:'info'|'warning'|'error'|'success';time:string;read:boolean }
 interface SimReading { deviceId:string;type:string;block:string;power:number;voltage:number;temperature:number;timestamp:string;sent:boolean }
-type Screen = 'home'|'block'|'charts'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'
+type Screen = 'home'|'block'|'charts'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const makeSensors=(t=20,sol=600,bat=50,gi=1,ge=1,ws=25,ec=0.38,co2=2):Sensor[]=>[
@@ -97,10 +97,14 @@ export default function VCGApp() {
   const [apiOnline,setApiOnline]=useState<boolean|null>(null)
   const [apiMsg,setApiMsg]=useState('')
   const [isOffline,setIsOffline]=useState(false)
-  const [blocks,setBlocks]=useState<Block[]>(INIT_BLOCKS)
+  const [blocks,setBlocks]=useState<Block[]>(()=>{
+    try{const s=localStorage.getItem('vcg_blocks');return s?JSON.parse(s):INIT_BLOCKS}catch{return INIT_BLOCKS}
+  })
   const [sensors,setSensors]=useState<Record<string,Sensor[]>>(INIT_SENSORS)
   const [evs,setEvs]=useState<EV[]>(INIT_EVS)
-  const [devices,setDevices]=useState<Device[]>(INIT_DEVICES)
+  const [devices,setDevices]=useState<Device[]>(()=>{
+    try{const s=localStorage.getItem('vcg_devices');return s?JSON.parse(s):INIT_DEVICES}catch{return INIT_DEVICES}
+  })
   const [alerts,setAlerts]=useState<Alert[]>([])
   const [notifications,setNotifications]=useState<Notification[]>([])
   const [history,setHistory]=useState<Record<string,HistoryEntry[]>>({'BLK-A':makeHistory('BLK-A'),'BLK-B':makeHistory('BLK-B'),'BLK-C':makeHistory('BLK-C'),'BLK-D':makeHistory('BLK-D')})
@@ -166,6 +170,81 @@ export default function VCGApp() {
       return [newN,...p].slice(0,20)
     })
   }
+
+  // ── localStorage: save blocks/devices on change ──────────────────────────
+  useEffect(()=>{
+    try{localStorage.setItem('vcg_blocks',JSON.stringify(blocks))}catch{}
+  },[blocks])
+  useEffect(()=>{
+    try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
+  },[devices])
+  useEffect(()=>{
+    try{localStorage.setItem('vcg_sensors',JSON.stringify(sensors))}catch{}
+  },[sensors])
+
+  // ── Weather API (OpenWeatherMap free) ────────────────────────────────────
+  const WEATHER_KEY = 'bd5e378503939ddaee76f12ad7a97608' // free demo key
+  const CITY_COORDS:Record<string,[number,number]> = {
+    'Dublin':  [53.3498, -6.2603],
+    'Kerry':   [52.1545, -9.5669],
+    'Galway':  [53.2707, -9.0568],
+    'Limerick':[52.6638, -8.6267],
+  }
+  const fetchWeather=useCallback(async(city:string)=>{
+    try{
+      const [lat,lon]=CITY_COORDS[city]||[53.3498,-6.2603]
+      const r=await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_KEY}&units=metric`)
+      if(r.ok){
+        const d=await r.json()
+        return {
+          temp:+(d.main?.temp||20).toFixed(1),
+          humidity:d.main?.humidity||60,
+          windSpeed:+(d.wind?.speed||5*3.6).toFixed(1),
+          solar:d.clouds?.all?Math.round(900*(1-d.clouds.all/100)):600,
+          desc:d.weather?.[0]?.description||'',
+          icon:d.weather?.[0]?.icon||'01d',
+          city,
+        }
+      }
+    }catch{}
+    return null
+  },[])
+
+  const [weatherData,setWeatherData]=useState<Record<string,any>>({})
+
+  useEffect(()=>{
+    const loadWeather=async()=>{
+      const cities=['Dublin','Kerry','Galway','Limerick']
+      const results:Record<string,any>={}
+      for(const city of cities){
+        const w=await fetchWeather(city)
+        if(w) results[city]=w
+      }
+      if(Object.keys(results).length>0){
+        setWeatherData(results)
+        // Update sensor temps and solar with real weather
+        setSensors(prev=>{
+          const n={...prev}
+          INIT_BLOCKS.forEach(b=>{
+            const w=results[b.location]
+            if(w&&n[b.id]){
+              n[b.id]=n[b.id].map(s=>{
+                if(s.label==='Temperature') return {...s,value:w.temp,bar:Math.min(Math.round(w.temp/40*100),100)}
+                if(s.label==='Solar Irradiance') return {...s,value:w.solar,bar:Math.min(Math.round(w.solar/1000*100),100)}
+                if(s.label==='Wind Speed') return {...s,value:+(w.windSpeed*3.6).toFixed(1),bar:Math.min(Math.round(w.windSpeed*3.6/60*100),100)}
+                return s
+              })
+            }
+          })
+          return n
+        })
+        addNotification({title:'🌤️ Weather Updated',message:'Live weather data loaded for all communities',type:'success'})
+      }
+    }
+    loadWeather()
+    const iv=setInterval(loadWeather,600000) // refresh every 10 min
+    return ()=>clearInterval(iv)
+  },[])
 
   const checkApi=useCallback(async()=>{
     if(isOffline){setApiOnline(false);setApiMsg('Offline mode');return}
@@ -344,7 +423,7 @@ export default function VCGApp() {
 
       {/* CONTENT */}
       <div style={{position:'relative',zIndex:1,padding:'0 16px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%',animation:'pageEnter 0.4s ease'}} key={screen}>
-        {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onNavigate={setScreen} darkMode={darkMode} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
+        {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onNavigate={setScreen} darkMode={darkMode} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} weatherData={weatherData} />}
         {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='charts'    && <ChartsScreen    T={T} blocks={blocks} history={history} sensors={sensors} cardStyle={cardStyle} darkMode={darkMode} />}
         {screen==='alerts'    && <AlertsScreen    T={T} alerts={alerts} onMarkRead={(id:string)=>setAlerts(p=>p.map(a=>a.id===id?{...a,read:true}:a))} onMarkAll={()=>setAlerts(p=>p.map(a=>({...a,read:true})))} cardStyle={cardStyle} pill={pill} />}
@@ -357,6 +436,8 @@ export default function VCGApp() {
         {screen==='register'  && <RegisterScreen  T={T} blocks={blocks} activeBlock={activeBlock} onBack={()=>setScreen(activeBlock?'block':'home')} apiOnline={apiOnline} onDeviceAdded={addDevice} cardStyle={cardStyle} ironBtn={ironBtn} lbl={lbl} inp={inp} />}
         {screen==='import'    && <ImportScreen    T={T} blocks={blocks} onBack={goHome} onBlocksImported={(bs:Block[])=>{bs.forEach(b=>addBlock(b));goHome()}} onDevicesImported={(ds:Device[])=>{ds.forEach(d=>addDevice(d))}} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='simulator' && <SimulatorScreen T={T} blocks={blocks} apiOnline={apiOnline} isOffline={isOffline} onDeviceAdded={addDevice} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} pill={pill} />}
+        {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} />}
+        {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='fiware'    && <FIWAREScreen    T={T} blocks={blocks} sensors={sensors} apiOnline={apiOnline} isOffline={isOffline} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={checkApi} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} darkMode={darkMode} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} />}
       </div>
@@ -728,7 +809,7 @@ function HBarChart({data,T}:{data:{label:string;value:number;max:number;color:st
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeScreen({T,blocks,onBlockClick,apiOnline,apiMsg,alerts,isOffline,onAddCommunity,onNavigate,darkMode,cardStyle,pill,ironBtn}:any) {
+function HomeScreen({T,blocks,onBlockClick,apiOnline,apiMsg,alerts,isOffline,onAddCommunity,onNavigate,darkMode,cardStyle,pill,ironBtn,weatherData}:any) {
   const unread=alerts.filter((a:Alert)=>!a.read).length
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -738,6 +819,23 @@ function HomeScreen({T,blocks,onBlockClick,apiOnline,apiMsg,alerts,isOffline,onA
         <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13,color:T.red}}>{unread} Active Alert{unread>1?'s':''}</div><div style={{fontSize:11,color:T.text2}}>Tap to view</div></div>
         <span style={{fontSize:18,color:T.red}}>›</span>
       </div>}
+      {/* Weather Strip */}
+      {Object.keys(weatherData).length>0&&(
+        <div style={{display:'grid',gridTemplateColumns:`repeat(${Math.min(Object.keys(weatherData).length,4)},1fr)`,gap:8}}>
+          {Object.values(weatherData).slice(0,4).map((w:any)=>(
+            <div key={w.city} style={{background:darkMode?'rgba(19,24,31,0.9)':'rgba(255,255,255,0.9)',borderRadius:14,padding:'10px 8px',textAlign:'center',border:darkMode?'1px solid rgba(255,214,10,0.12)':undefined,backdropFilter:'blur(12px)'}}>
+              <img src={`https://openweathermap.org/img/wn/${w.icon}.png`} width={32} height={32} alt={w.desc} style={{display:'block',margin:'0 auto'}}/>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:700,color:T.gold,lineHeight:1}}>{w.temp}°</div>
+              <div style={{fontSize:9,color:T.text3,marginTop:2,fontWeight:700,textTransform:'uppercase',letterSpacing:0.5}}>{w.city}</div>
+              <div style={{display:'flex',justifyContent:'center',gap:6,marginTop:4}}>
+                <span style={{fontSize:9,color:T.text2}}>💨{w.windSpeed}km/h</span>
+                <span style={{fontSize:9,color:T.text2}}>💧{w.humidity}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Energy Flow Animation */}
       <EnergyFlow blocks={blocks} T={T} />
 
@@ -1568,6 +1666,8 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,darkMo
     {icon:'🗺️',label:'Map',         s:'map',     c:T.green},
     {icon:'🤖',label:'Simulator',   s:'simulator',c:T.red},
     {icon:'🔥',label:'FIWARE',      s:'fiware',  c:T.arc},
+    {icon:'🏗️',label:'Architecture', s:'architecture',c:'#ffd60a'},
+    {icon:'📄',label:'PDF Report',   s:'report',  c:T.red},
     {icon:'➕',label:'Register',    s:'register',c:T.red},
     {icon:'📊',label:'Import Excel',s:'import',  c:T.green},
   ]
@@ -1657,3 +1757,305 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,darkMo
 }
 
 function SH({T,title}:{T:any;title:string}){return <div style={{fontWeight:800,fontSize:14,color:T.text,paddingLeft:4}}>{title}</div>}
+
+// ── FEATURE 2: ARCHITECTURE DIAGRAM ──────────────────────────────────────────
+function ArchitectureScreen({T,blocks,apiOnline,cardStyle}:any) {
+  const [activeNode,setActiveNode]=useState<string|null>(null)
+  const nodes=[
+    {id:'app',    x:160,y:20,  w:120,h:40,label:'VCG Web App',    sub:'Vercel · Next.js',     color:'#e63946',icon:'📱'},
+    {id:'api',    x:160,y:110, w:120,h:40,label:'IEEE 2030.5 API', sub:'FastAPI · Render',      color:'#ffd60a',icon:'⚡'},
+    {id:'fiware', x:20, y:200, w:110,h:40,label:'FIWARE Orion',   sub:'NGSI-v2 · Port 1026',  color:'#58c4dc',icon:'🔥'},
+    {id:'influx', x:155,y:200, w:110,h:40,label:'InfluxDB',       sub:'Time-series · Port 8086',color:'#10b981',icon:'📊'},
+    {id:'ids',    x:290,y:200, w:110,h:40,label:'IDS Connector',  sub:'Dataspace · Port 8181', color:'#8b5cf6',icon:'🔒'},
+    {id:'grafana',x:20, y:290, w:110,h:40,label:'Grafana',        sub:'Dashboard · Port 3000', color:'#f97316',icon:'📈'},
+    {id:'mongo',  x:155,y:290, w:110,h:40,label:'MongoDB',        sub:'OrionDB · Port 27017',  color:'#10b981',icon:'🗄️'},
+    {id:'group12',x:290,y:290, w:110,h:40,label:'Group 12',       sub:'NGSI Data Exchange',    color:'#ec4899',icon:'🤝'},
+  ]
+  const edges=[
+    {from:'app',   to:'api',     label:'REST/IEEE'},
+    {from:'api',   to:'fiware',  label:'NGSI-v2'},
+    {from:'api',   to:'influx',  label:'Time-series'},
+    {from:'api',   to:'ids',     label:'IDS Protocol'},
+    {from:'fiware',to:'mongo',   label:'Storage'},
+    {from:'fiware',to:'grafana', label:'Metrics'},
+    {from:'ids',   to:'group12', label:'Data Contract'},
+  ]
+  const getNodeCenter=(id:string)=>{
+    const n=nodes.find(x=>x.id===id)
+    if(!n) return {x:0,y:0}
+    return {x:n.x+n.w/2, y:n.y+n.h/2}
+  }
+  const activeInfo:Record<string,string>={
+    app:'VCG Web App deployed on Vercel. Built with Next.js + React. Connects to IEEE 2030.5 API on Render.',
+    api:'FastAPI backend implementing IEEE 2030.5 standard. Endpoints: /edev, /dcap, /dr, /tm, /mup. Live on Render.',
+    fiware:'FIWARE Orion Context Broker v3.10.1. Stores NGSI-v2 entities for all energy blocks. Runs on port 1026.',
+    influx:'InfluxDB 2.7 time-series database. Stores energy readings with nanosecond precision. Bucket: energy_readings.',
+    ids:'IDS Dataspace Connector. Enables secure data sharing between VCG and Group 12 using IDS protocols.',
+    grafana:'Grafana dashboard visualizing real-time energy data from InfluxDB. Pre-configured with energy panels.',
+    mongo:'MongoDB 4.4 backing store for FIWARE Orion. Persists all NGSI-v2 context entities.',
+    group12:'Group 12 VCG system. Data exchanged via IDS Dataspace using NGSI format for cross-community energy sharing.',
+  }
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#1a0505)',border:'none'})}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#ffd60a',marginBottom:4}}>🏗️ System Architecture</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)'}}>IEEE 2030.5 · FIWARE · IDS Dataspace — tap any component</div>
+      </div>
+
+      <div style={cardStyle({padding:16,overflow:'hidden'})}>
+        <svg width="100%" viewBox="0 0 420 350" style={{display:'block',overflow:'visible'}}>
+          <defs>
+            <marker id="archArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="rgba(255,214,10,0.6)" strokeWidth="1.5" strokeLinecap="round"/>
+            </marker>
+          </defs>
+          {/* Edges */}
+          {edges.map((e,i)=>{
+            const f=getNodeCenter(e.from), t=getNodeCenter(e.to)
+            const mx=(f.x+t.x)/2, my=(f.y+t.y)/2
+            return (
+              <g key={i}>
+                <path d={`M${f.x} ${f.y} Q${mx} ${my} ${t.x} ${t.y}`}
+                  fill="none" stroke="rgba(255,214,10,0.25)" strokeWidth={1.5}
+                  strokeDasharray="4,3" markerEnd="url(#archArrow)"/>
+                <text x={mx} y={my-4} textAnchor="middle" fontSize="7"
+                  fill="rgba(255,214,10,0.5)" fontFamily="Share Tech Mono,monospace">{e.label}</text>
+              </g>
+            )
+          })}
+          {/* Nodes */}
+          {nodes.map(n=>(
+            <g key={n.id} onClick={()=>setActiveNode(activeNode===n.id?null:n.id)} style={{cursor:'pointer'}}>
+              <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={10}
+                fill={activeNode===n.id?n.color+'40':n.color+'15'}
+                stroke={activeNode===n.id?n.color:n.color+'60'}
+                strokeWidth={activeNode===n.id?2:1.5}/>
+              {activeNode===n.id&&<rect x={n.x-2} y={n.y-2} width={n.w+4} height={n.h+4} rx={12}
+                fill="none" stroke={n.color} strokeWidth={1} opacity={0.4}
+                strokeDasharray="3,3"/>}
+              <text x={n.x+n.w/2} y={n.y+16} textAnchor="middle" fontSize="10"
+                fontWeight="700" fill={activeNode===n.id?n.color:'#e0d0c0'}
+                fontFamily="Plus Jakarta Sans,sans-serif">{n.icon} {n.label}</text>
+              <text x={n.x+n.w/2} y={n.y+29} textAnchor="middle" fontSize="7.5"
+                fill="rgba(255,255,255,0.4)" fontFamily="Share Tech Mono,monospace">{n.sub}</text>
+            </g>
+          ))}
+          {/* API Online indicator */}
+          <circle cx={220} cy={130} r={4} fill={apiOnline?'#10b981':'#e63946'}
+            opacity={0.9}/>
+          <text x={228} y={134} fontSize="7" fill={apiOnline?'#10b981':'#e63946'}
+            fontFamily="Share Tech Mono,monospace">{apiOnline?'LIVE':'DOWN'}</text>
+        </svg>
+      </div>
+
+      {/* Active node info */}
+      {activeNode&&(
+        <div style={cardStyle({border:`1px solid ${nodes.find(n=>n.id===activeNode)?.color}40`,background:darkMode?'rgba(19,24,31,0.95)':undefined})}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+            <div style={{width:36,height:36,borderRadius:10,background:nodes.find(n=>n.id===activeNode)?.color+'25',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>{nodes.find(n=>n.id===activeNode)?.icon}</div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,color:nodes.find(n=>n.id===activeNode)?.color,fontWeight:700}}>{nodes.find(n=>n.id===activeNode)?.label}</div>
+          </div>
+          <div style={{fontSize:13,color:T.text2,lineHeight:1.6}}>{activeInfo[activeNode]}</div>
+        </div>
+      )}
+
+      {/* Legend */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:12}}>Component Status</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          {[
+            {label:'VCG Web App',   status:'Live on Vercel',   color:'#10b981'},
+            {label:'IEEE 2030.5 API',status:'Live on Render',  color:'#10b981'},
+            {label:'FIWARE Orion',  status:'Local (Docker)',   color:'#f59e0b'},
+            {label:'InfluxDB',      status:'Local (Docker)',   color:'#f59e0b'},
+            {label:'IDS Connector', status:'Local (Docker)',   color:'#f59e0b'},
+            {label:'Grafana',       status:'Local (Docker)',   color:'#f59e0b'},
+          ].map(s=>(
+            <div key={s.label} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',background:T.bg,borderRadius:10,border:`1px solid ${T.border}`}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:s.color,flexShrink:0,boxShadow:`0 0 6px ${s.color}`}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:11,color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.label}</div>
+                <div style={{fontSize:9,color:T.text3}}>{s.status}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── FEATURE 2b: PDF REPORT GENERATOR ─────────────────────────────────────────
+function ReportScreen({T,blocks,sensors,devices,history,weatherData,cardStyle,ironBtn}:any) {
+  const [generating,setGenerating]=useState(false)
+  const [preview,setPreview]=useState(false)
+  const now=new Date()
+
+  const generateReport=async()=>{
+    setGenerating(true)
+    try {
+      const XLSX=await import('xlsx')
+      // Create multi-sheet workbook as report
+      const wb=XLSX.utils.book_new()
+
+      // Sheet 1: Executive Summary
+      const summary=[
+        ['VCG PROJECT REPORT','','',''],
+        ['Virtual Communication Gateway — IEEE 2030.5','','',''],
+        [`Generated: ${now.toLocaleString()}`,'','',''],
+        ['Student: Ronit · ID: MI6228 · Group 13','','',''],
+        ['Mentor: Paolo Cammardella','','',''],
+        ['','','',''],
+        ['SYSTEM OVERVIEW','','',''],
+        ['Total Communities',blocks.length,'',''],
+        ['Total Devices',devices.length,'',''],
+        ['Total Generation (kW)',blocks.reduce((s:number,b:any)=>s+b.generation,0).toFixed(1),'',''],
+        ['Total Consumption (kW)',blocks.reduce((s:number,b:any)=>s+b.consumption,0).toFixed(1),'',''],
+        ['Net Balance (kW)',(blocks.reduce((s:number,b:any)=>s+b.generation,0)-blocks.reduce((s:number,b:any)=>s+b.consumption,0)).toFixed(1),'',''],
+        ['Surplus Blocks',blocks.filter((b:any)=>b.status==='Surplus').length,'',''],
+        ['Deficit Blocks',blocks.filter((b:any)=>b.status==='Deficit').length,'',''],
+        ['','','',''],
+        ['TECH STACK','','',''],
+        ['Frontend','Next.js + React on Vercel','',''],
+        ['Backend','FastAPI + IEEE 2030.5 on Render','',''],
+        ['IoT Platform','FIWARE Orion v3.10.1','',''],
+        ['Time-series DB','InfluxDB 2.7','',''],
+        ['Data Exchange','IDS Dataspace Connector','',''],
+        ['Visualization','Grafana Dashboard','',''],
+      ]
+      const ws1=XLSX.utils.aoa_to_sheet(summary)
+      XLSX.utils.book_append_sheet(wb,ws1,'Executive Summary')
+
+      // Sheet 2: Block Data
+      const blockData=[
+        ['Block ID','Name','Location','Generation (kW)','Consumption (kW)','Net Balance (kW)','Status','Devices'],
+        ...blocks.map((b:any)=>[b.id,b.name,b.location,b.generation.toFixed(1),b.consumption.toFixed(1),b.net.toFixed(1),b.status,b.devices])
+      ]
+      const ws2=XLSX.utils.aoa_to_sheet(blockData)
+      XLSX.utils.book_append_sheet(wb,ws2,'Community Blocks')
+
+      // Sheet 3: Sensor Data
+      const sensorRows:any[]=[['Block','Sensor','Value','Unit']]
+      blocks.forEach((b:any)=>{
+        const s=sensors[b.id]||[]
+        s.forEach((sensor:any)=>sensorRows.push([b.name,sensor.label,sensor.value,sensor.unit]))
+      })
+      const ws3=XLSX.utils.aoa_to_sheet(sensorRows)
+      XLSX.utils.book_append_sheet(wb,ws3,'Sensor Readings')
+
+      // Sheet 4: Device Registry
+      const deviceData=[
+        ['SFDI','LFDI','Type','Block','Status','Power (W)','Voltage (V)','Last Seen'],
+        ...devices.map((d:any)=>[d.sfdi,d.lfdi||'',d.type,d.block,d.status,d.power||'',d.voltage||'',d.lastSeen||''])
+      ]
+      const ws4=XLSX.utils.aoa_to_sheet(deviceData)
+      XLSX.utils.book_append_sheet(wb,ws4,'Device Registry')
+
+      // Sheet 5: Energy History
+      const allHistory:any[]=[['Time','Block','Generation (kW)','Consumption (kW)','Net (kW)','Cost (€)']]
+      Object.values(history).flat().slice(-50).forEach((h:any)=>{
+        allHistory.push([h.time,h.block,h.generation,h.consumption,h.net,h.cost])
+      })
+      const ws5=XLSX.utils.aoa_to_sheet(allHistory)
+      XLSX.utils.book_append_sheet(wb,ws5,'Energy History')
+
+      // Sheet 6: Weather (if available)
+      if(Object.keys(weatherData).length>0){
+        const weatherRows=[
+          ['City','Temperature (°C)','Wind Speed (km/h)','Humidity (%)','Solar Irradiance (W/m²)','Description'],
+          ...Object.values(weatherData).map((w:any)=>[w.city,w.temp,w.windSpeed,w.humidity,w.solar,w.desc])
+        ]
+        const ws6=XLSX.utils.aoa_to_sheet(weatherRows)
+        XLSX.utils.book_append_sheet(wb,ws6,'Weather Data')
+      }
+
+      XLSX.writeFile(wb,`VCG_Report_MI6228_${now.toISOString().slice(0,10)}.xlsx`)
+      setPreview(true)
+    } catch(e) { console.error(e) }
+    setGenerating(false)
+  }
+
+  const totalGen=blocks.reduce((s:number,b:any)=>s+b.generation,0)
+  const totalCon=blocks.reduce((s:number,b:any)=>s+b.consumption,0)
+  const totalNet=totalGen-totalCon
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#1a0505)',border:'none'})}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#e63946',marginBottom:4}}>📄 Project Report</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)'}}>Auto-generate full VCG project report</div>
+      </div>
+
+      {/* Report preview */}
+      <div style={cardStyle({border:'1px solid rgba(255,214,10,0.2)'})}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,color:T.gold,marginBottom:16,textAlign:'center',letterSpacing:2}}>VCG PROJECT REPORT</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:T.text2,textAlign:'center',marginBottom:20}}>
+          Virtual Communication Gateway · IEEE 2030.5<br/>
+          MI6228 · Group 13 · {now.toLocaleDateString()}
+        </div>
+
+        {/* Stats grid */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+          {[
+            {icon:'🏘️',label:'Communities',value:blocks.length,color:T.gold},
+            {icon:'📟',label:'Devices',value:devices.length,color:T.arc},
+            {icon:'⚡',label:'Total Gen',value:totalGen.toFixed(1)+' kW',color:'#10b981'},
+            {icon:'🔌',label:'Total Con',value:totalCon.toFixed(1)+' kW',color:'#f59e0b'},
+            {icon:'📊',label:'Net Balance',value:(totalNet>=0?'+':'')+totalNet.toFixed(1)+' kW',color:totalNet>=0?'#10b981':'#e63946'},
+            {icon:'🌿',label:'CO₂ Saved',value:Object.values(sensors).flat().filter((s:any)=>s.label==='CO₂ Saved').reduce((t:number,s:any)=>t+s.value,0).toFixed(1)+' kg',color:'#10b981'},
+          ].map(s=>(
+            <div key={s.label} style={{background:T.bg,borderRadius:12,padding:'10px 12px',border:`1px solid ${T.border}`}}>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:18}}>{s.icon}</span>
+                <div>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:700,color:s.color}}>{s.value}</div>
+                  <div style={{fontSize:10,color:T.text3}}>{s.label}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Report contents */}
+        <div style={{background:T.bg,borderRadius:12,padding:'12px 14px',marginBottom:16,border:`1px solid ${T.border}`}}>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3,marginBottom:10,letterSpacing:1}}>REPORT CONTAINS (6 SHEETS)</div>
+          {[
+            {icon:'📋',sheet:'Executive Summary',desc:'System overview, tech stack, KPIs'},
+            {icon:'🏘️',sheet:'Community Blocks',desc:`${blocks.length} blocks with generation/consumption data`},
+            {icon:'🌡️',sheet:'Sensor Readings',desc:'All 8 sensors per block'},
+            {icon:'📟',sheet:'Device Registry',desc:`${devices.length} IEEE 2030.5 devices`},
+            {icon:'📈',sheet:'Energy History',desc:'Last 50 energy readings'},
+            {icon:'🌤️',sheet:'Weather Data',desc:Object.keys(weatherData).length>0?'Live weather for all cities':'Not available (API offline)'},
+          ].map((s,i)=>(
+            <div key={s.sheet} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:i<5?`1px solid ${T.border}`:'none'}}>
+              <span style={{fontSize:16}}>{s.icon}</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:12,color:T.text}}>{s.sheet}</div>
+                <div style={{fontSize:10,color:T.text3}}>{s.desc}</div>
+              </div>
+              <div style={{width:6,height:6,borderRadius:'50%',background:'#10b981'}}/>
+            </div>
+          ))}
+        </div>
+
+        <button onClick={generateReport} disabled={generating} style={ironBtn({})}>
+          {generating
+            ?<><div style={{width:16,height:16,border:'2px solid #fff',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 1s linear infinite'}}/>Generating Report...</>
+            :'📥 Download Full Report (.xlsx)'}
+        </button>
+      </div>
+
+      {preview&&(
+        <div style={{padding:'14px 16px',borderRadius:14,background:'rgba(16,185,129,0.12)',border:'1px solid rgba(16,185,129,0.3)',fontSize:13,fontWeight:700,color:'#10b981',textAlign:'center'}}>
+          ✅ Report downloaded! Check your Downloads folder.<br/>
+          <span style={{fontSize:11,fontWeight:400,color:T.text2}}>VCG_Report_MI6228_{now.toISOString().slice(0,10)}.xlsx</span>
+        </div>
+      )}
+
+      <div style={cardStyle({background:'rgba(255,214,10,0.05)',border:'1px solid rgba(255,214,10,0.2)'})}>
+        <div style={{fontWeight:700,fontSize:13,color:T.gold,marginBottom:8}}>💡 Pro tip for Paolo</div>
+        <div style={{fontSize:12,color:T.text2,lineHeight:1.6}}>Open the downloaded .xlsx in Excel or Google Sheets. Each tab contains a different section of the project. The Executive Summary tab gives a complete overview of the VCG system.</div>
+      </div>
+    </div>
+  )
+}
