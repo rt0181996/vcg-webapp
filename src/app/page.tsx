@@ -481,9 +481,6 @@ function ChartsScreen({T,blocks,history,sensors,cardStyle,darkMode}:any) {
         <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>Real-time energy visualization</div>
       </div>
       <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:4}}>
-        {TYPES.map(t=><button key={t.id} onClick={()=>setChartType(t.id as ChartType)} style={{flexShrink:0,padding:'8px 14px',borderRadius:20,border:`2px solid ${chartType===t.id?T.red:T.border}`,background:chartType===t.id?`linear-gradient(135deg,#c1121f,#e63946)`:T.card,fontWeight:700,fontSize:12,color:chartType===t.id?'#fff':T.text2,cursor:'pointer',display:'flex',alignItems:'center',gap:6,whiteSpace:'nowrap'}}><span>{t.icon}</span>{t.label}</button>)}
-      </div>
-      <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:4}}>
         {['ALL',...blocks.map((b:Block)=>b.id)].map((id:string)=>{const b=blocks.find((x:Block)=>x.id===id);return <button key={id} onClick={()=>setSelBlock(id)} style={{flexShrink:0,padding:'6px 14px',borderRadius:20,border:`2px solid ${selBlock===id?(b?.color||T.arc):T.border}`,background:selBlock===id?(b?.color||T.arc)+'20':T.card,fontWeight:700,fontSize:11,color:selBlock===id?(b?.color||T.arc):T.text3,cursor:'pointer',whiteSpace:'nowrap'}}>{id==='ALL'?'All':b?.name||id}</button>})}
       </div>
       <div style={cardStyle()}>
