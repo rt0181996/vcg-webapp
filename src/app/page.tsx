@@ -2326,7 +2326,7 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStar
     {icon:'🏗️',label:'Architecture', s:'architecture',c:'#ffd60a'},
     {icon:'📄',label:'PDF Report',   s:'report',      c:'#e63946'},
     {icon:'🎬',label:'Demo Mode',    s:'demo',        c:'#ffd60a'},
-    {icon:'🔗',label:'NGSI Import',  s:'ngsi',        c:'#58c4dc'},
+    {icon:'🤝',label:'Group 12 Data',s:'group12',     c:'#ec4899'},
     {icon:'🔥',label:'FIWARE',       s:'fiware',      c:'#58c4dc'},
     {icon:'🤖',label:'Simulator',    s:'simulator',   c:'#e63946'},
     {icon:'📟',label:'Devices',      s:'devices',     c:'#58c4dc'},
