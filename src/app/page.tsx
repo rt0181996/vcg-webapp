@@ -15,7 +15,7 @@ interface Alert { id:string;block:string;type:string;message:string;severity:'hi
 interface HistoryEntry { time:string;block:string;generation:number;consumption:number;net:number;cost:number }
 interface Notification { id:string;title:string;message:string;type:'info'|'warning'|'error'|'success';time:string;read:boolean }
 interface SimReading { deviceId:string;type:string;block:string;power:number;voltage:number;temperature:number;timestamp:string;sent:boolean }
-type Screen = 'home'|'block'|'charts'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'ngsi'
+type Screen = 'home'|'block'|'charts'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'ngsi'|'group12'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const makeSensors=(t=20,sol=600,bat=50,gi=1,ge=1,ws=25,ec=0.38,co2=2):Sensor[]=>[
@@ -544,6 +544,7 @@ export default function VCGApp() {
         {screen==='register'  && <RegisterScreen  T={T} blocks={blocks} activeBlock={activeBlock} onBack={()=>setScreen(activeBlock?'block':'home')} apiOnline={apiOnline} onDeviceAdded={addDevice} cardStyle={cardStyle} ironBtn={ironBtn} lbl={lbl} inp={inp} />}
         {screen==='import'    && <ImportScreen    T={T} blocks={blocks} onBack={goHome} onBlocksImported={(bs:Block[])=>{bs.forEach(b=>addBlock(b));goHome()}} onDevicesImported={(ds:Device[])=>{ds.forEach(d=>addDevice(d))}} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='simulator' && <SimulatorScreen T={T} blocks={blocks} apiOnline={apiOnline} isOffline={isOffline} onDeviceAdded={addDevice} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} pill={pill} />}
+        {screen==='group12'    && <Group12Screen T={T} onBack={()=>setScreen('settings')} onImport={(b:Block,d:Device[],s:Sensor[])=>{addBlock(b);d.forEach((dev:Device)=>addDevice(dev));setSensors((p:any)=>({...p,[b.id]:s}));setScreen('home');addNotification({title:'✅ Group 12 Imported',message:`${b.name} added with ${d.length} devices`,type:'success'})}} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='ngsi'       && <NGSIScreen T={T} blocks={blocks} onBlocksImported={(bs:Block[])=>{bs.forEach((b:Block)=>addBlock(b));setScreen('home')}} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} darkMode={darkMode} />}
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
@@ -2486,6 +2487,352 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStar
         ))}
       </div>
       <div style={{textAlign:'center',padding:8,fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3,letterSpacing:1.5}}>VCG v10.0 · IRON MAN EDITION ⚡</div>
+    </div>
+  )
+}
+
+// ── GROUP 12 DATA IMPORTER ────────────────────────────────────────────────────
+function Group12Screen({T,onBack,onImport,cardStyle,ironBtn}:any) {
+  const [file,setFile]=useState<File|null>(null)
+  const [parsed,setParsed]=useState<any[]>([])
+  const [preview,setPreview]=useState<{block:any;devices:any[];sensors:any[]}|null>(null)
+  const [error,setError]=useState('')
+  const [importing,setImporting]=useState(false)
+  const [done,setDone]=useState(false)
+
+  const SENSOR_MAP:Record<string,{label:string;icon:string;color:string;unit:string;maxVal:number}>={
+    temperature:   {label:'Temperature',    icon:'🌡️',color:'#f97316',unit:'°C',   maxVal:50},
+    humidity:      {label:'Humidity',       icon:'💧',color:'#3b82f6',unit:'%',    maxVal:100},
+    co2:           {label:'CO₂ Level',      icon:'🌿',color:'#10b981',unit:'ppm',  maxVal:5000},
+    illuminance:   {label:'Solar Irradiance',icon:'☀️',color:'#ffd60a',unit:'lux', maxVal:1000},
+    batteryLevel:  {label:'Battery SOC',    icon:'🔋',color:'#10b981',unit:'%',    maxVal:100},
+    pressure:      {label:'Air Pressure',   icon:'🌀',color:'#8b5cf6',unit:'hPa',  maxVal:1100},
+    waterFlow:     {label:'Water Flow',     icon:'💧',color:'#06b6d4',unit:'L/min',maxVal:10000},
+    motion:        {label:'Motion',         icon:'🏃',color:'#f59e0b',unit:'state',maxVal:1},
+    doorState:     {label:'Door State',     icon:'🚪',color:'#6b7280',unit:'state',maxVal:1},
+    energy:        {label:'Energy Meter',   icon:'⚡',color:'#ffd60a',unit:'kWh',  maxVal:200000},
+  }
+
+  const parseCSV=(text:string)=>{
+    const lines=text.trim().split('\n')
+    const headers=lines[0].split(',').map(h=>h.trim().replace(/\r/g,''))
+    return lines.slice(1).map(line=>{
+      const vals=line.split(',')
+      const row:Record<string,string>={}
+      headers.forEach((h,i)=>row[h]=(vals[i]||'').trim().replace(/\r/g,''))
+      return row
+    }).filter(r=>r['ngsi_id'])
+  }
+
+  const buildPreview=(rows:any[])=>{
+    // Get latest value per device/property
+    const latest:Record<string,any>={}
+    rows.forEach(r=>{
+      const key=`${r['ngsi_id']}__${r['ngsi_property']}`
+      if(!latest[key]) latest[key]=r
+    })
+    const latestRows=Object.values(latest)
+
+    // Get SmartMeter energy for generation/consumption
+    const energyRows=latestRows.filter(r=>r['ngsi_property']==='energy')
+    const totalEnergy=energyRows.reduce((s:number,r:any)=>s+parseFloat(r['value_only']||0),0)
+    const generation=+(totalEnergy/1000).toFixed(1) // Convert kWh to kW approx
+    const consumption=+(generation*0.75).toFixed(1) // Estimate consumption as 75% of generation
+    const net=+(generation-consumption).toFixed(1)
+
+    // Build sensors from all sensor readings
+    const sensors:any[]=[]
+    latestRows.forEach(r=>{
+      const prop=r['ngsi_property']
+      const map=SENSOR_MAP[prop]
+      if(map&&prop!=='energy'){
+        const val=parseFloat(r['value_only']||0)
+        sensors.push({
+          icon:map.icon,
+          label:map.label,
+          value:+val.toFixed(2),
+          unit:map.unit,
+          color:map.color,
+          bar:Math.min(Math.round((val/map.maxVal)*100),100)
+        })
+      }
+    })
+
+    // Add energy sensor
+    if(energyRows.length>0){
+      const val=parseFloat(energyRows[0]['value_only']||0)
+      sensors.push({icon:'⚡',label:'Energy Meter',value:+val.toFixed(0),unit:'kWh',color:'#ffd60a',bar:Math.min(Math.round(val/200000*100),100)})
+    }
+
+    // Build devices from unique device IDs
+    const deviceIds=new Set(rows.map(r=>r['ngsi_id']))
+    const devices:any[]=Array.from(deviceIds).map((id:any)=>{
+      const row=rows.find(r=>r['ngsi_id']===id)
+      return {
+        sfdi:id.split(':').pop()||id,
+        lfdi:id,
+        type:row?.['ngsi_type']||'Sensor',
+        block:'G12-BLK',
+        status:'Online',
+        power:0,
+        voltage:0,
+        lastSeen:row?.['created_at']||'Just imported'
+      }
+    })
+
+    // Build block
+    const block={
+      id:'G12-BLK',
+      name:'Group 12 Block',
+      location:'External',
+      emoji:'🤝',
+      generation,
+      consumption,
+      net,
+      status:net>0?'Surplus':'Deficit' as 'Surplus'|'Deficit',
+      devices:devices.length,
+      color:'#ec4899',
+      lat:53.2707,
+      lng:-9.0568,
+    }
+
+    return {block,devices,sensors}
+  }
+
+  const handleFile=(f:File)=>{
+    setFile(f);setError('');setParsed([]);setPreview(null);setDone(false)
+    const reader=new FileReader()
+    reader.onload=e=>{
+      try{
+        const text=e.target?.result as string
+        const rows=parseCSV(text)
+        if(!rows.length){setError('No data found in file');return}
+        setParsed(rows)
+        const prev=buildPreview(rows)
+        setPreview(prev)
+      }catch(err){setError('Could not parse CSV file')}
+    }
+    reader.readAsText(f)
+  }
+
+  const handleImport=()=>{
+    if(!preview) return
+    setImporting(true)
+    setTimeout(()=>{
+      onImport(preview.block, preview.devices, preview.sensors)
+      setImporting(false)
+      setDone(true)
+    },800)
+  }
+
+  const pill=(color:string,text:string)=>(
+    <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,letterSpacing:1.5,
+      padding:'3px 10px',borderRadius:20,textTransform:'uppercase' as const,
+      background:color+'25',border:`1px solid ${color}60`,color}}>{text}</span>
+  )
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      {/* Header */}
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#1a0520)',border:'none'})}}>
+        <button onClick={onBack} style={{background:'rgba(255,255,255,0.1)',border:'none',
+          borderRadius:10,padding:'6px 14px',color:'#fff',fontSize:12,fontWeight:700,
+          cursor:'pointer',marginBottom:14}}>← Back</button>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#ec4899',marginBottom:4}}>🤝 Group 12 Data</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)'}}>
+          Import NGSI-LD sensor data from Group 12
+        </div>
+      </div>
+
+      {/* What's in their data */}
+      <div style={cardStyle({border:'1px solid rgba(236,72,153,0.2)'})}>
+        <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12}}>📦 Group 12 Devices</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          {[
+            {icon:'🌡️',label:'Temperature',    sub:'TemperatureSensor'},
+            {icon:'💧',label:'Humidity',        sub:'HumiditySensor'},
+            {icon:'⚡',label:'Smart Meter',     sub:'Energy readings'},
+            {icon:'🔋',label:'Battery',         sub:'BatterySensor'},
+            {icon:'☀️',label:'Light/Solar',     sub:'LightSensor'},
+            {icon:'🌿',label:'CO₂',             sub:'CO2Sensor'},
+            {icon:'🌀',label:'Pressure',        sub:'PressureSensor'},
+            {icon:'💧',label:'Water Flow',      sub:'FlowSensor'},
+            {icon:'🏃',label:'Motion',          sub:'MotionSensor'},
+            {icon:'🚪',label:'Door State',      sub:'DoorSensor'},
+          ].map(d=>(
+            <div key={d.label} style={{display:'flex',alignItems:'center',gap:8,
+              padding:'8px 10px',background:T.bg,borderRadius:10,border:`1px solid ${T.border}`}}>
+              <span style={{fontSize:16}}>{d.icon}</span>
+              <div>
+                <div style={{fontWeight:700,fontSize:11,color:T.text}}>{d.label}</div>
+                <div style={{fontSize:9,color:T.text3}}>{d.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Upload */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:12}}>📤 Upload Group 12 CSV</div>
+        <label style={{display:'block',border:`2px dashed ${file?'#ec4899':T.border}`,
+          borderRadius:16,padding:'28px 20px',textAlign:'center',cursor:'pointer',
+          background:file?'rgba(236,72,153,0.05)':T.bg,transition:'all 0.2s'}}>
+          <input type="file" accept=".csv" style={{display:'none'}}
+            onChange={e=>{if(e.target.files?.[0]) handleFile(e.target.files[0])}}/>
+          <div style={{fontSize:36,marginBottom:8}}>{file?'📗':'📂'}</div>
+          {file
+            ?<><div style={{fontWeight:800,fontSize:14,color:'#ec4899'}}>{file.name}</div>
+               <div style={{fontSize:11,color:T.text2,marginTop:4}}>{parsed.length} rows loaded</div></>
+            :<><div style={{fontWeight:700,fontSize:14,color:T.text}}>Tap to upload CSV</div>
+               <div style={{fontSize:11,color:T.text3,marginTop:4}}>ngsi_processed_data.csv</div></>
+          }
+        </label>
+        {error&&<div style={{marginTop:10,padding:'10px',background:'#fef2f2',
+          borderRadius:10,fontSize:12,color:'#e63946'}}>⚠️ {error}</div>}
+      </div>
+
+      {/* Preview */}
+      {preview&&(
+        <>
+          <div style={{fontWeight:800,fontSize:14,color:T.text,paddingLeft:4}}>
+            Preview — Ready to import
+          </div>
+
+          {/* Block card */}
+          <div style={{...cardStyle(),borderLeft:'4px solid #ec4899'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+              <div style={{display:'flex',gap:12,alignItems:'center'}}>
+                <span style={{fontSize:32}}>🤝</span>
+                <div>
+                  <div style={{fontWeight:800,fontSize:16,color:T.text}}>{preview.block.name}</div>
+                  <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>
+                    {preview.block.id} · {preview.block.devices} devices
+                  </div>
+                </div>
+              </div>
+              {pill(preview.block.net>=0?'#10b981':'#e63946', preview.block.status)}
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+              {[
+                {l:'Generation',v:preview.block.generation+' kW',c:'#10b981'},
+                {l:'Consumption',v:preview.block.consumption+' kW',c:'#f59e0b'},
+                {l:'Net Balance',v:(preview.block.net>=0?'+':'')+preview.block.net+' kW',c:preview.block.net>=0?'#10b981':'#e63946'},
+              ].map(s=>(
+                <div key={s.l} style={{background:T.bg,borderRadius:10,padding:'10px 6px',textAlign:'center',border:`1px solid ${T.border}`}}>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:700,color:s.c}}>{s.v}</div>
+                  <div style={{fontSize:9,color:T.text3,marginTop:2}}>{s.l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sensors */}
+          <div style={{fontWeight:700,fontSize:13,color:T.text2,paddingLeft:4}}>
+            {preview.sensors.length} Sensors
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            {preview.sensors.map((s:any,i:number)=>(
+              <div key={i} style={cardStyle({padding:'12px 14px'})}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+                  <span style={{fontSize:18}}>{s.icon}</span>
+                  <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
+                    color:T.text3,background:T.bg,padding:'2px 6px',borderRadius:6}}>{s.unit}</span>
+                </div>
+                <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:700,
+                  color:s.color,lineHeight:1,marginBottom:4}}>{s.value}</div>
+                <div style={{fontSize:10,color:T.text2,marginBottom:6}}>{s.label}</div>
+                <div style={{height:3,background:T.bg,borderRadius:2,overflow:'hidden'}}>
+                  <div style={{height:'100%',width:Math.min(s.bar,100)+'%',
+                    background:`linear-gradient(90deg,${s.color}60,${s.color})`,borderRadius:2}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Devices */}
+          <div style={{fontWeight:700,fontSize:13,color:T.text2,paddingLeft:4}}>
+            {preview.devices.length} Devices
+          </div>
+          <div style={cardStyle({padding:0,overflow:'hidden'})}>
+            <div style={{overflowX:'auto'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+                <thead>
+                  <tr style={{background:'linear-gradient(135deg,#0d1117,#1a0520)'}}>
+                    {['Device ID','Type','Status','Last Seen'].map(h=>(
+                      <th key={h} style={{padding:'10px',textAlign:'left',
+                        fontFamily:"'Share Tech Mono',monospace",fontSize:9,
+                        color:'rgba(255,255,255,0.7)',letterSpacing:1}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.devices.map((d:any,i:number)=>(
+                    <tr key={i} style={{background:i%2===0?T.bg:T.card,
+                      borderBottom:`1px solid ${T.border}`}}>
+                      <td style={{padding:'8px 10px',fontFamily:"'Share Tech Mono',monospace",
+                        color:'#ec4899',fontSize:10}}>{d.sfdi}</td>
+                      <td style={{padding:'8px 10px',color:T.text2}}>{d.type}</td>
+                      <td style={{padding:'8px 10px'}}>
+                        <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
+                          padding:'2px 8px',borderRadius:20,background:'rgba(16,185,129,0.2)',
+                          border:'1px solid rgba(16,185,129,0.4)',color:'#10b981'}}>Online</span>
+                      </td>
+                      <td style={{padding:'8px 10px',fontFamily:"'Share Tech Mono',monospace",
+                        fontSize:10,color:T.text3}}>{d.lastSeen}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Import button */}
+          {!done
+            ?<button onClick={handleImport} disabled={importing}
+              style={{background:'linear-gradient(135deg,#831843,#ec4899)',color:'#fff',
+                border:'none',borderRadius:14,padding:'14px',fontWeight:800,fontSize:14,
+                cursor:'pointer',width:'100%',display:'flex',alignItems:'center',
+                justifyContent:'center',gap:8,
+                boxShadow:'0 4px 20px rgba(236,72,153,0.4)'}}>
+              {importing
+                ?<><div style={{width:16,height:16,border:'2px solid #fff',
+                    borderTopColor:'transparent',borderRadius:'50%',
+                    animation:'spin 1s linear infinite'}}/>Importing...</>
+                :`🤝 Import Group 12 Data (${preview.devices.length} devices, ${preview.sensors.length} sensors)`
+              }
+            </button>
+            :<div style={{padding:'16px',borderRadius:14,
+                background:'rgba(16,185,129,0.12)',
+                border:'1px solid rgba(16,185,129,0.3)',
+                fontSize:14,fontWeight:800,color:'#10b981',textAlign:'center'}}>
+              ✅ Group 12 data imported! Check Home screen.
+            </div>
+          }
+        </>
+      )}
+
+      {/* Info box */}
+      <div style={cardStyle({background:'rgba(236,72,153,0.05)',
+        border:'1px solid rgba(236,72,153,0.2)'})}>
+        <div style={{fontWeight:700,fontSize:13,color:'#ec4899',marginBottom:8}}>
+          💡 About this import
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          {[
+            'Uploads Group 12\'s NGSI-LD sensor data from their CSV export',
+            'SmartMeter energy → mapped to Generation/Consumption kW',
+            'All 10 sensors appear in their block detail view',
+            'All 10 devices registered in your device registry',
+            'Data persists in localStorage — survives page refresh',
+            'Their block appears alongside yours on the Ireland map',
+          ].map((t,i)=>(
+            <div key={i} style={{display:'flex',gap:8,fontSize:12,color:T.text2}}>
+              <span style={{color:'#ec4899',flexShrink:0}}>→</span>{t}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
