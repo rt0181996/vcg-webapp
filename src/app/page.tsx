@@ -15,7 +15,6 @@ interface HistoryEntry { time:string;block:string;generation:number;consumption:
 interface Notification { id:string;title:string;message:string;type:'info'|'warning'|'error'|'success';time:string;read:boolean }
 interface SimReading { deviceId:string;type:string;block:string;power:number;voltage:number;temperature:number;timestamp:string;sent:boolean }
 type Screen = 'home'|'block'|'charts'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'
-type ChartType = 'bar'|'line'|'area'|'donut'|'radar'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const makeSensors=(t=20,sol=600,bat=50,gi=1,ge=1,ws=25,ec=0.38,co2=2):Sensor[]=>[
@@ -275,7 +274,7 @@ export default function VCGApp() {
       )}
 
       {/* CONTENT */}
-      <div style={{position:'relative',zIndex:1,marginTop:-44,padding:'0 16px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%'}}>
+      <div style={{position:'relative',zIndex:1,padding:'0 16px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%'}}>
         {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onNavigate={setScreen} darkMode={darkMode} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='charts'    && <ChartsScreen    T={T} blocks={blocks} history={history} sensors={sensors} cardStyle={cardStyle} darkMode={darkMode} />}
