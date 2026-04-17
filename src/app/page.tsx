@@ -2304,7 +2304,7 @@ function NGSIScreen({T,blocks,onBlocksImported,cardStyle,ironBtn}:any) {
 }
 
 // ── UPDATE SETTINGS: Add PIN, Demo, Health Monitor ────────────────────────────
-function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStartDemo,darkMode,onToggleDark,isOffline,cardStyle,ironBtn,goldBtn,pinLocked,savedPin,onPinChange,endpointHealth}:any) {
+function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStartDemo,darkMode,onToggleDark,isOffline,cardStyle,ironBtn,goldBtn,pinLocked,savedPin,onPinChange,endpointHealth,canInstall,installed,onInstall}:any) {
   const [pinInput,setPinInput]=useState('')
   const [pinMode,setPinMode]=useState<'view'|'set'|'change'>('view')
   const [newPin,setNewPin]=useState('')
