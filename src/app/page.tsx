@@ -304,7 +304,10 @@ export default function VCGApp() {
       setEndpointHealth(p=>({...p,[ep]:{status:'checking',latency:0}}))
       const start=Date.now()
       try{
-        const r=await fetch(API+ep,{signal:AbortSignal.timeout(5000)})
+        const controller=new AbortController()
+        const timer=setTimeout(()=>controller.abort(),5000)
+        const r=await fetch(API+ep,{signal:controller.signal})
+        clearTimeout(timer)
         const latency=Date.now()-start
         setEndpointHealth(p=>({...p,[ep]:{status:r.ok?'ok':'error',latency}}))
       }catch{
@@ -539,7 +542,7 @@ export default function VCGApp() {
         {screen==='import'    && <ImportScreen    T={T} blocks={blocks} onBack={goHome} onBlocksImported={(bs:Block[])=>{bs.forEach(b=>addBlock(b));goHome()}} onDevicesImported={(ds:Device[])=>{ds.forEach(d=>addDevice(d))}} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='simulator' && <SimulatorScreen T={T} blocks={blocks} apiOnline={apiOnline} isOffline={isOffline} onDeviceAdded={addDevice} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} pill={pill} />}
         {screen==='ngsi'       && <NGSIScreen T={T} blocks={blocks} onBlocksImported={(bs:Block[])=>{bs.forEach((b:Block)=>addBlock(b));setScreen('home')}} cardStyle={cardStyle} ironBtn={ironBtn} />}
-        {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} />}
+        {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} darkMode={darkMode} />}
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='fiware'    && <FIWAREScreen    T={T} blocks={blocks} sensors={sensors} apiOnline={apiOnline} isOffline={isOffline} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={()=>{checkApi();checkEndpoints()}} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} endpointHealth={endpointHealth} pinLocked={pinLocked} savedPin={savedPin} onPinChange={(pin:string)=>{setSavedPin(pin);if(pin){localStorage.setItem('vcg_pin',pin);localStorage.setItem('vcg_pin_enabled','true');setPinLocked(true)}else{localStorage.removeItem('vcg_pin');localStorage.setItem('vcg_pin_enabled','false');setPinLocked(false)}}} />}
@@ -1763,7 +1766,7 @@ function ImportScreen({T,blocks,onBack,onBlocksImported,onDevicesImported,cardSt
 function SH({T,title}:{T:any;title:string}){return <div style={{fontWeight:800,fontSize:14,color:T.text,paddingLeft:4}}>{title}</div>}
 
 // ── FEATURE 2: ARCHITECTURE DIAGRAM ──────────────────────────────────────────
-function ArchitectureScreen({T,blocks,apiOnline,cardStyle}:any) {
+function ArchitectureScreen({T,blocks,apiOnline,cardStyle,darkMode}:any) {
   const [activeNode,setActiveNode]=useState<string|null>(null)
   const nodes=[
     {id:'app',    x:160,y:20,  w:120,h:40,label:'VCG Web App',    sub:'Vercel · Next.js',     color:'#e63946',icon:'📱'},
