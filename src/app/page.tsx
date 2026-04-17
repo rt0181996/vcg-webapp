@@ -14,7 +14,7 @@ interface Alert { id:string;block:string;type:string;message:string;severity:'hi
 interface HistoryEntry { time:string;block:string;generation:number;consumption:number;net:number;cost:number }
 interface Notification { id:string;title:string;message:string;type:'info'|'warning'|'error'|'success';time:string;read:boolean }
 interface SimReading { deviceId:string;type:string;block:string;power:number;voltage:number;temperature:number;timestamp:string;sent:boolean }
-type Screen = 'home'|'block'|'charts'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'
+type Screen = 'home'|'block'|'charts'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'ngsi'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const makeSensors=(t=20,sol=600,bat=50,gi=1,ge=1,ws=25,ec=0.38,co2=2):Sensor[]=>[
@@ -109,7 +109,57 @@ export default function VCGApp() {
   const [notifications,setNotifications]=useState<Notification[]>([])
   const [history,setHistory]=useState<Record<string,HistoryEntry[]>>({'BLK-A':makeHistory('BLK-A'),'BLK-B':makeHistory('BLK-B'),'BLK-C':makeHistory('BLK-C'),'BLK-D':makeHistory('BLK-D')})
   const [showQR,setShowQR]=useState(false)
+  const [installPrompt,setInstallPrompt]=useState<any>(null)
+  const [showInstallBanner,setShowInstallBanner]=useState(false)
+  const [installed,setInstalled]=useState(false)
+
+  useEffect(()=>{
+    const handler=(e:any)=>{
+      e.preventDefault()
+      setInstallPrompt(e)
+      setShowInstallBanner(true)
+    }
+    window.addEventListener('beforeinstallprompt',handler)
+    window.addEventListener('appinstalled',()=>{setInstalled(true);setShowInstallBanner(false)})
+    return ()=>window.removeEventListener('beforeinstallprompt',handler)
+  },[])
+
+  const handleInstall=async()=>{
+    if(!installPrompt) return
+    installPrompt.prompt()
+    const result=await installPrompt.userChoice
+    if(result.outcome==='accepted'){setInstalled(true);setShowInstallBanner(false)}
+    setInstallPrompt(null)
+  }
+  const [demoMode,setDemoMode]=useState(false)
+  const demoRef=useRef<any>(null)
+
+  const DEMO_SCREENS:Screen[]=['home','charts','alerts','demand','history','cost','devices','map','compare']
+  const [demoIdx,setDemoIdx]=useState(0)
+
+  useEffect(()=>{
+    if(demoMode){
+      setScreen(DEMO_SCREENS[0]);setDemoIdx(0)
+      demoRef.current=setInterval(()=>{
+        setDemoIdx(p=>{
+          const next=(p+1)%DEMO_SCREENS.length
+          setScreen(DEMO_SCREENS[next])
+          return next
+        })
+      },4000)
+    } else {
+      if(demoRef.current) clearInterval(demoRef.current)
+    }
+    return ()=>{ if(demoRef.current) clearInterval(demoRef.current) }
+  },[demoMode])
   const [loading,setLoading]=useState(true)
+  const [pinLocked,setPinLocked]=useState(()=>{
+    try{ return localStorage.getItem('vcg_pin_enabled')==='true' }catch{ return false }
+  })
+  const [pinUnlocked,setPinUnlocked]=useState(false)
+  const [savedPin,setSavedPin]=useState(()=>{
+    try{ return localStorage.getItem('vcg_pin')||'' }catch{ return '' }
+  })
 
   useEffect(()=>{
     const t=setTimeout(()=>setLoading(false), 2800)
@@ -246,10 +296,27 @@ export default function VCGApp() {
     return ()=>clearInterval(iv)
   },[])
 
+  const [endpointHealth,setEndpointHealth]=useState<Record<string,{status:'ok'|'error'|'checking';latency:number}>>({})
+
+  const checkEndpoints=useCallback(async()=>{
+    const endpoints=['/dcap','/edev','/tm','/dr','/mup']
+    for(const ep of endpoints){
+      setEndpointHealth(p=>({...p,[ep]:{status:'checking',latency:0}}))
+      const start=Date.now()
+      try{
+        const r=await fetch(API+ep,{signal:AbortSignal.timeout(5000)})
+        const latency=Date.now()-start
+        setEndpointHealth(p=>({...p,[ep]:{status:r.ok?'ok':'error',latency}}))
+      }catch{
+        setEndpointHealth(p=>({...p,[ep]:{status:'error',latency:0}}))
+      }
+    }
+  },[])
+
   const checkApi=useCallback(async()=>{
     if(isOffline){setApiOnline(false);setApiMsg('Offline mode');return}
     setApiOnline(null)
-    try{const r=await fetch(API);const d=await r.json();setApiOnline(true);setApiMsg(d.message||'Connected');addNotification({title:'API Connected',message:d.message||'Gateway is online',type:'success'})}
+    try{const r=await fetch(API);const d=await r.json();setApiOnline(true);setApiMsg(d.message||'Connected');addNotification({title:'API Connected',message:d.message||'Gateway is online',type:'success'});checkEndpoints()}
     catch{setApiOnline(false);setApiMsg('API offline')}
   },[isOffline])
   useEffect(()=>{checkApi()},[])
@@ -291,6 +358,10 @@ export default function VCGApp() {
   const pill=(color:string):React.CSSProperties=>({fontFamily:"'Share Tech Mono',monospace",fontSize:10,letterSpacing:1.5,padding:'3px 10px',borderRadius:20,textTransform:'uppercase' as const,background:color+'25',border:`1px solid ${color}60`,color})
   const lbl:React.CSSProperties={fontSize:12,fontWeight:700,color:T.text2,display:'block',marginBottom:6}
   const inp=(x?:React.CSSProperties):React.CSSProperties=>({width:'100%',padding:'11px 14px',border:`1.5px solid ${T.border}`,borderRadius:12,fontSize:14,fontFamily:'Plus Jakarta Sans,sans-serif',color:T.text,background:T.card2,outline:'none',...x})
+
+  if(pinLocked && savedPin && !pinUnlocked) return (
+    <PinScreen onUnlock={()=>setPinUnlocked(true)} savedPin={savedPin} />
+  )
 
   if(loading) return (
     <div style={{position:'fixed',inset:0,background:'#0d1117',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:9999,fontFamily:'Plus Jakarta Sans,sans-serif'}}>
@@ -347,6 +418,37 @@ export default function VCGApp() {
 
   return (
     <div style={{maxWidth:'100%',minHeight:'100vh',fontFamily:'Plus Jakarta Sans,sans-serif',background:T.bg,position:'relative',transition:'background 0.3s',display:'flex',flexDirection:'column'}}>
+
+      {/* Demo Mode Banner */}
+      {demoMode&&(
+        <div style={{position:'fixed',top:isOffline?40:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:900,background:'linear-gradient(135deg,#c1121f,#ffd60a)',padding:'8px 16px',display:'flex',alignItems:'center',gap:8,zIndex:201}}>
+          <span style={{fontSize:16}}>🎬</span>
+          <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'#000',fontWeight:700,flex:1}}>DEMO MODE — Auto-cycling screens ({DEMO_SCREENS[demoIdx].toUpperCase()})</span>
+          <button onClick={()=>setDemoMode(false)} style={{background:'rgba(0,0,0,0.2)',border:'none',borderRadius:6,padding:'3px 10px',fontSize:11,fontWeight:700,color:'#000',cursor:'pointer'}}>✕ Stop</button>
+        </div>
+      )}
+
+      {/* PWA Install Banner */}
+      {showInstallBanner&&!installed&&(
+        <div style={{position:'fixed',top:demoMode?40:0,left:'50%',transform:'translateX(-50%)',
+          width:'100%',maxWidth:900,
+          background:'linear-gradient(135deg,#0d4f6e,#58c4dc)',
+          padding:'10px 16px',display:'flex',alignItems:'center',gap:10,zIndex:202}}>
+          <span style={{fontSize:18}}>📱</span>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:11,color:'#fff',fontWeight:700}}>Install VCG App</div>
+            <div style={{fontSize:10,color:'rgba(255,255,255,0.7)'}}>Add to home screen for offline access</div>
+          </div>
+          <button onClick={handleInstall}
+            style={{background:'#ffd60a',border:'none',borderRadius:8,
+              padding:'6px 14px',fontWeight:800,fontSize:11,color:'#0d1117',cursor:'pointer'}}>
+            Install
+          </button>
+          <button onClick={()=>setShowInstallBanner(false)}
+            style={{background:'none',border:'none',color:'rgba(255,255,255,0.7)',
+              fontSize:18,cursor:'pointer',padding:'0 4px'}}>×</button>
+        </div>
+      )}
 
       {/* Offline Banner */}
       {isOffline&&(
@@ -423,7 +525,7 @@ export default function VCGApp() {
 
       {/* CONTENT */}
       <div style={{position:'relative',zIndex:1,padding:'0 16px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%',animation:'pageEnter 0.4s ease'}} key={screen}>
-        {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onNavigate={setScreen} darkMode={darkMode} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} weatherData={weatherData} />}
+        {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} weatherData={weatherData} />}
         {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='charts'    && <ChartsScreen    T={T} blocks={blocks} history={history} sensors={sensors} cardStyle={cardStyle} darkMode={darkMode} />}
         {screen==='alerts'    && <AlertsScreen    T={T} alerts={alerts} onMarkRead={(id:string)=>setAlerts(p=>p.map(a=>a.id===id?{...a,read:true}:a))} onMarkAll={()=>setAlerts(p=>p.map(a=>({...a,read:true})))} cardStyle={cardStyle} pill={pill} />}
@@ -436,10 +538,11 @@ export default function VCGApp() {
         {screen==='register'  && <RegisterScreen  T={T} blocks={blocks} activeBlock={activeBlock} onBack={()=>setScreen(activeBlock?'block':'home')} apiOnline={apiOnline} onDeviceAdded={addDevice} cardStyle={cardStyle} ironBtn={ironBtn} lbl={lbl} inp={inp} />}
         {screen==='import'    && <ImportScreen    T={T} blocks={blocks} onBack={goHome} onBlocksImported={(bs:Block[])=>{bs.forEach(b=>addBlock(b));goHome()}} onDevicesImported={(ds:Device[])=>{ds.forEach(d=>addDevice(d))}} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='simulator' && <SimulatorScreen T={T} blocks={blocks} apiOnline={apiOnline} isOffline={isOffline} onDeviceAdded={addDevice} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} pill={pill} />}
+        {screen==='ngsi'       && <NGSIScreen T={T} blocks={blocks} onBlocksImported={(bs:Block[])=>{bs.forEach((b:Block)=>addBlock(b));setScreen('home')}} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} />}
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='fiware'    && <FIWAREScreen    T={T} blocks={blocks} sensors={sensors} apiOnline={apiOnline} isOffline={isOffline} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} />}
-        {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={checkApi} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} darkMode={darkMode} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} />}
+        {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={()=>{checkApi();checkEndpoints()}} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} endpointHealth={endpointHealth} pinLocked={pinLocked} savedPin={savedPin} onPinChange={(pin:string)=>{setSavedPin(pin);if(pin){localStorage.setItem('vcg_pin',pin);localStorage.setItem('vcg_pin_enabled','true');setPinLocked(true)}else{localStorage.removeItem('vcg_pin');localStorage.setItem('vcg_pin_enabled','false');setPinLocked(false)}}} />}
       </div>
 
       {/* BOTTOM NAV */}
@@ -1668,6 +1771,8 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,darkMo
     {icon:'🔥',label:'FIWARE',      s:'fiware',  c:T.arc},
     {icon:'🏗️',label:'Architecture', s:'architecture',c:'#ffd60a'},
     {icon:'📄',label:'PDF Report',   s:'report',  c:T.red},
+    {icon:'🎬',label:'Demo Mode',    s:'demo',    c:'#ffd60a'},
+    {icon:'🔗',label:'NGSI Import',   s:'ngsi',    c:'#58c4dc'},
     {icon:'➕',label:'Register',    s:'register',c:T.red},
     {icon:'📊',label:'Import Excel',s:'import',  c:T.green},
   ]
@@ -1678,7 +1783,7 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,darkMo
         <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,color:'#ffd60a',marginBottom:14,letterSpacing:1}}>⚙️ More Features</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
           {MORE.map(item=>(
-            <button key={item.s} onClick={()=>onNavigate(item.s)} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:14,cursor:'pointer',textAlign:'left' as const,transition:'all 0.15s'}}
+            <button key={item.s} onClick={()=>item.s==='demo'?onStartDemo():onNavigate(item.s)} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:14,cursor:'pointer',textAlign:'left' as const,transition:'all 0.15s'}}
               onMouseOver={e=>{e.currentTarget.style.background='rgba(255,255,255,0.13)';e.currentTarget.style.borderColor=item.c+'80'}}
               onMouseOut={e=>{e.currentTarget.style.background='rgba(255,255,255,0.06)';e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'}}>
               <div style={{width:38,height:38,borderRadius:12,background:item.c+'25',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>{item.icon}</div>
@@ -2056,6 +2161,428 @@ function ReportScreen({T,blocks,sensors,devices,history,weatherData,cardStyle,ir
         <div style={{fontWeight:700,fontSize:13,color:T.gold,marginBottom:8}}>💡 Pro tip for Paolo</div>
         <div style={{fontSize:12,color:T.text2,lineHeight:1.6}}>Open the downloaded .xlsx in Excel or Google Sheets. Each tab contains a different section of the project. The Executive Summary tab gives a complete overview of the VCG system.</div>
       </div>
+    </div>
+  )
+}
+
+// ── FEATURE 4: PIN LOCK SCREEN ─────────────────────────────────────────────────
+function PinScreen({onUnlock,savedPin}:{onUnlock:()=>void;savedPin:string}) {
+  const [pin,setPin]=useState('')
+  const [error,setError]=useState(false)
+  const [shake,setShake]=useState(false)
+
+  const handleDigit=(d:string)=>{
+    if(pin.length>=4) return
+    const newPin=pin+d
+    setPin(newPin)
+    if(newPin.length===4){
+      if(newPin===savedPin){
+        onUnlock()
+      } else {
+        setError(true); setShake(true)
+        setTimeout(()=>{setPin('');setError(false);setShake(false)},600)
+      }
+    }
+  }
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'#0a0c10',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontFamily:'Plus Jakarta Sans,sans-serif',zIndex:9999}}>
+      <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
+
+      {/* Arc reactor */}
+      <div style={{width:70,height:70,borderRadius:'50%',background:'radial-gradient(circle,#58c4dc,#0d4f6e)',border:'2px solid #58c4dc',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,marginBottom:24,boxShadow:'0 0 30px rgba(88,196,220,0.5)'}}>⚡</div>
+
+      <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:900,color:'#fff',letterSpacing:3,marginBottom:6}}>VCG PORTAL</div>
+      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,214,10,0.6)',letterSpacing:2,marginBottom:40}}>ENTER PIN TO ACCESS</div>
+
+      {/* PIN dots */}
+      <div style={{display:'flex',gap:16,marginBottom:40,animation:shake?'shake 0.5s ease':undefined}}>
+        {[0,1,2,3].map(i=>(
+          <div key={i} style={{width:18,height:18,borderRadius:'50%',
+            background:pin.length>i?(error?'#e63946':'#ffd60a'):'transparent',
+            border:`2px solid ${pin.length>i?(error?'#e63946':'#ffd60a'):'rgba(255,255,255,0.2)'}`,
+            transition:'all 0.15s',
+            boxShadow:pin.length>i?`0 0 12px ${error?'#e63946':'#ffd60a'}`:undefined}}/>
+        ))}
+      </div>
+
+      {/* Keypad */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,maxWidth:240}}>
+        {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d,i)=>(
+          <button key={i} onClick={()=>d==='⌫'?setPin(p=>p.slice(0,-1)):d?handleDigit(d):null}
+            disabled={!d}
+            style={{height:60,borderRadius:14,border:'1px solid rgba(255,255,255,0.1)',
+              background:d?'rgba(255,255,255,0.06)':'transparent',
+              color:d==='⌫'?'#e63946':'#fff',
+              fontSize:d==='⌫'?20:22,fontWeight:700,cursor:d?'pointer':'default',
+              fontFamily:"'Orbitron',monospace",
+              transition:'all 0.1s',
+              opacity:d?1:0}}
+            onMouseOver={e=>{if(d)(e.currentTarget.style.background='rgba(255,214,10,0.12)')}}
+            onMouseOut={e=>{if(d)(e.currentTarget.style.background='rgba(255,255,255,0.06)')}}>
+            {d}
+          </button>
+        ))}
+      </div>
+
+      {error&&<div style={{marginTop:20,fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:'#e63946',letterSpacing:2}}>INCORRECT PIN</div>}
+    </div>
+  )
+}
+
+// ── FEATURE 2: NGSI GROUP 12 IMPORT ──────────────────────────────────────────
+function NGSIScreen({T,blocks,onBlocksImported,cardStyle,ironBtn}:any) {
+  const [input,setInput]=useState('')
+  const [orionUrl,setOrionUrl]=useState('')
+  const [preview,setPreview]=useState<Block[]>([])
+  const [error,setError]=useState('')
+  const [loading,setLoading]=useState(false)
+  const [tab,setTab]=useState<'paste'|'url'>('paste')
+
+  const COLORS=['#58c4dc','#ec4899','#8b5cf6','#f97316','#10b981','#3b82f6']
+  const EMOJIS=['🏘️','🌆','🌉','🏚️','🌃','🏗️']
+
+  const parseNGSI=(data:any[]):Block[]=>{
+    return data.filter((e:any)=>e.type==='EnergyBlock'||e.type==='EnergyMeter'||e.generation||e.consumption).map((e:any,i:number)=>{
+      const gen=parseFloat(e.generation?.value||e.generation||100)
+      const con=parseFloat(e.consumption?.value||e.consumption||80)
+      const net=+(gen-con).toFixed(1)
+      const idx=blocks.length+i
+      return {
+        id: e.id?.split(':').pop()||`EXT-${i+1}`,
+        name: e.name?.value||e.name||`Group 12 Block ${i+1}`,
+        location: e.location?.value||e.location||'External',
+        emoji: EMOJIS[i%EMOJIS.length],
+        generation: gen, consumption: con, net,
+        status: net>0.5?'Surplus':net<-0.5?'Deficit':'Balanced',
+        devices: parseInt(e.devices?.value||e.numDevices||'0'),
+        color: COLORS[i%COLORS.length],
+        lat: parseFloat(e.lat||e.latitude?.value||53.3),
+        lng: parseFloat(e.lng||e.longitude?.value||-7.5),
+      }
+    })
+  }
+
+  const handlePaste=()=>{
+    setError('');setPreview([])
+    try{
+      const data=JSON.parse(input)
+      const arr=Array.isArray(data)?data:[data]
+      const parsed=parseNGSI(arr)
+      if(!parsed.length){setError('No valid EnergyBlock entities found in JSON');return}
+      setPreview(parsed)
+    }catch{setError('Invalid JSON — please check the format')}
+  }
+
+  const fetchFromOrion=async()=>{
+    setError('');setPreview([]);setLoading(true)
+    try{
+      const r=await fetch(`${orionUrl}/v2/entities?type=EnergyBlock&limit=20`)
+      if(!r.ok){setError(`Orion returned ${r.status}`);setLoading(false);return}
+      const data=await r.json()
+      if(!data.length){setError('No EnergyBlock entities found in Orion');setLoading(false);return}
+      setPreview(parseNGSI(data))
+    }catch{setError('Cannot reach Orion broker — check URL and CORS')}
+    setLoading(false)
+  }
+
+  const SAMPLE_NGSI=`[
+  {
+    "id": "urn:ngsi-ld:EnergyBlock:G12-BlockA",
+    "type": "EnergyBlock",
+    "name": { "value": "G12 Block A" },
+    "location": { "value": "Cork" },
+    "generation": { "value": 132.5 },
+    "consumption": { "value": 98.0 },
+    "devices": { "value": 8 }
+  }
+]`
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#0a1628)',border:'none'})}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#58c4dc',marginBottom:4}}>🔗 NGSI Import</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)'}}>Import Group 12 data via NGSI-v2 format</div>
+      </div>
+
+      {/* Tab selector */}
+      <div style={{display:'flex',gap:8,background:T.card,borderRadius:16,padding:8,boxShadow:'0 2px 10px rgba(0,0,0,0.1)'}}>
+        {[{id:'paste',label:'📋 Paste JSON'},{id:'url',label:'🌐 Orion URL'}].map(t=>(
+          <button key={t.id} onClick={()=>{setTab(t.id as any);setError('');setPreview([])}}
+            style={{flex:1,padding:'10px',border:'none',borderRadius:12,fontWeight:800,fontSize:13,cursor:'pointer',
+              background:tab===t.id?'linear-gradient(135deg,#0d4f6e,#58c4dc)':T.bg,
+              color:tab===t.id?'#fff':T.text2}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab==='paste'&&(
+        <div style={cardStyle()}>
+          <div style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:8}}>Paste NGSI-v2 JSON from Group 12</div>
+          <textarea value={input} onChange={e=>setInput(e.target.value)}
+            placeholder={SAMPLE_NGSI}
+            style={{width:'100%',height:180,padding:'12px',border:`1.5px solid ${T.border}`,borderRadius:12,
+              fontSize:11,fontFamily:"'Share Tech Mono',monospace",color:T.text,background:T.bg,
+              outline:'none',resize:'vertical',lineHeight:1.6}}/>
+          <div style={{display:'flex',gap:8,marginTop:10}}>
+            <button onClick={handlePaste} style={{...ironBtn({}),flex:1}}>🔍 Parse JSON</button>
+            <button onClick={()=>setInput(SAMPLE_NGSI)} style={{background:T.arcLight,border:`1px solid ${T.arc}`,borderRadius:12,padding:'10px 14px',fontWeight:700,fontSize:12,color:T.arc,cursor:'pointer',whiteSpace:'nowrap'}}>Sample</button>
+          </div>
+        </div>
+      )}
+
+      {tab==='url'&&(
+        <div style={cardStyle()}>
+          <div style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:8}}>Group 12 Orion Broker URL</div>
+          <div style={{fontSize:12,color:T.text2,marginBottom:12}}>Ask Group 12 for their Orion URL and paste it here</div>
+          <input value={orionUrl} onChange={e=>setOrionUrl(e.target.value)}
+            placeholder="http://group12-orion.example.com:1026"
+            style={{width:'100%',padding:'11px 14px',border:`1.5px solid ${T.border}`,borderRadius:12,
+              fontSize:13,fontFamily:"'Share Tech Mono',monospace",color:T.text,background:T.bg,outline:'none',marginBottom:10}}/>
+          <button onClick={fetchFromOrion} disabled={!orionUrl||loading} style={ironBtn({background:loading?T.text3:undefined})}>
+            {loading?<><div style={{width:16,height:16,border:'2px solid #fff',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 1s linear infinite'}}/>Fetching...</>:'🌐 Fetch from Orion'}
+          </button>
+        </div>
+      )}
+
+      {error&&<div style={{padding:'12px 14px',borderRadius:12,background:'#fef2f2',border:'1px solid rgba(230,57,70,0.3)',fontSize:12,color:'#e63946',fontWeight:600}}>⚠️ {error}</div>}
+
+      {/* Preview */}
+      {preview.length>0&&(
+        <>
+          <div style={{fontWeight:800,fontSize:14,color:T.text,paddingLeft:4}}>Preview — {preview.length} block{preview.length>1?'s':''} found</div>
+          {preview.map((b,i)=>(
+            <div key={i} style={{...cardStyle(),borderLeft:`4px solid ${b.color}`}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                  <span style={{fontSize:24}}>{b.emoji}</span>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:15,color:T.text}}>{b.name}</div>
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>{b.id} · {b.location}</div>
+                  </div>
+                </div>
+                <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,letterSpacing:1.5,padding:'3px 10px',borderRadius:20,background:b.status==='Surplus'?'rgba(16,185,129,0.2)':'rgba(230,57,70,0.2)',border:`1px solid ${b.status==='Surplus'?'#10b981':'#e63946'}60`,color:b.status==='Surplus'?'#10b981':'#e63946'}}>{b.status}</div>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                {[{l:'Gen',v:b.generation.toFixed(1),c:'#10b981'},{l:'Con',v:b.consumption.toFixed(1),c:'#f59e0b'},{l:'Net',v:(b.net>=0?'+':'')+b.net.toFixed(1),c:b.status==='Surplus'?'#10b981':'#e63946'}].map(s=>(
+                  <div key={s.l} style={{background:T.bg,borderRadius:10,padding:'8px',textAlign:'center'}}>
+                    <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:700,color:s.c}}>{s.v}</div>
+                    <div style={{fontSize:9,color:T.text3,marginTop:2}}>{s.l} kW</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button onClick={()=>onBlocksImported(preview)} style={ironBtn({background:'linear-gradient(135deg,#0d4f6e,#58c4dc)',boxShadow:'0 4px 16px rgba(88,196,220,0.4)'})}>
+            ✅ Add {preview.length} Block{preview.length>1?'s':''} to Dashboard
+          </button>
+        </>
+      )}
+
+      {/* Info */}
+      <div style={cardStyle({background:'rgba(88,196,220,0.05)',border:'1px solid rgba(88,196,220,0.2)'})}>
+        <div style={{fontWeight:700,fontSize:13,color:T.arc,marginBottom:8}}>💡 How to get Group 12 data</div>
+        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          {[
+            '1. Ask Group 12 for their NGSI-v2 JSON export',
+            '2. Or ask for their Orion broker URL',
+            '3. Paste JSON or enter URL above',
+            '4. Preview their blocks, then add to your dashboard',
+            '5. Their data shows as new community blocks!'
+          ].map(t=>(
+            <div key={t} style={{fontSize:12,color:T.text2,display:'flex',gap:8}}>
+              <span style={{color:T.arc,flexShrink:0}}>→</span>{t}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── UPDATE SETTINGS: Add PIN, Demo, Health Monitor ────────────────────────────
+// Override SettingsScreen to add new features
+const _SettingsScreenOrig = SettingsScreen
+function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStartDemo,darkMode,onToggleDark,isOffline,cardStyle,ironBtn,goldBtn,pinLocked,savedPin,onPinChange,endpointHealth}:any) {
+  const [pinInput,setPinInput]=useState('')
+  const [pinMode,setPinMode]=useState<'view'|'set'|'change'>('view')
+  const [newPin,setNewPin]=useState('')
+  const [confirmPin,setConfirmPin]=useState('')
+  const [pinMsg,setPinMsg]=useState('')
+
+  const savePin=()=>{
+    if(newPin.length!==4||!/^\d{4}$/.test(newPin)){setPinMsg('PIN must be 4 digits');return}
+    if(newPin!==confirmPin){setPinMsg('PINs do not match');return}
+    onPinChange(newPin);setPinMsg('✅ PIN set!');setPinMode('view');setNewPin('');setConfirmPin('')
+    setTimeout(()=>setPinMsg(''),2000)
+  }
+
+  const MORE=[
+    {icon:'🏗️',label:'Architecture', s:'architecture',c:'#ffd60a'},
+    {icon:'📄',label:'PDF Report',   s:'report',      c:'#e63946'},
+    {icon:'🎬',label:'Demo Mode',    s:'demo',        c:'#ffd60a'},
+    {icon:'🔗',label:'NGSI Import',  s:'ngsi',        c:'#58c4dc'},
+    {icon:'🔥',label:'FIWARE',       s:'fiware',      c:'#58c4dc'},
+    {icon:'🤖',label:'Simulator',    s:'simulator',   c:'#e63946'},
+    {icon:'📟',label:'Devices',      s:'devices',     c:'#58c4dc'},
+    {icon:'🏆',label:'Compare',      s:'compare',     c:'#ffd60a'},
+    {icon:'🗺️',label:'Map',          s:'map',         c:'#10b981'},
+    {icon:'➕',label:'Register',     s:'register',    c:'#e63946'},
+    {icon:'📊',label:'Import Excel', s:'import',      c:'#10b981'},
+  ]
+
+  const ENDPOINTS=['/dcap','/edev','/tm','/dr','/mup']
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      {/* More Features Grid */}
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#1a0505)',border:'1px solid rgba(255,214,10,0.15)'})}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,color:'#ffd60a',marginBottom:14,letterSpacing:1}}>⚙️ More Features</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          {MORE.map(item=>(
+            <button key={item.s} onClick={()=>item.s==='demo'?onStartDemo():onNavigate(item.s)}
+              style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',
+                background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',
+                borderRadius:14,cursor:'pointer',textAlign:'left' as const,transition:'all 0.15s'}}
+              onMouseOver={e=>{e.currentTarget.style.background='rgba(255,255,255,0.12)';e.currentTarget.style.borderColor=item.c+'60'}}
+              onMouseOut={e=>{e.currentTarget.style.background='rgba(255,255,255,0.05)';e.currentTarget.style.borderColor='rgba(255,255,255,0.08)'}}>
+              <div style={{width:36,height:36,borderRadius:10,background:item.c+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>{item.icon}</div>
+              <span style={{fontWeight:700,fontSize:12,color:'#fff'}}>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Profile */}
+      <div style={{background:'linear-gradient(135deg,#0a0c10,#3d0808)',borderRadius:24,padding:24,color:'#fff',border:'1px solid rgba(230,57,70,0.3)',boxShadow:'0 8px 32px rgba(230,57,70,0.2)'}}>
+        <div style={{width:56,height:56,borderRadius:18,background:'linear-gradient(135deg,#8b0000,#e63946)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,marginBottom:14,boxShadow:'0 4px 16px rgba(230,57,70,0.5)'}}>👨‍💻</div>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,color:'#fff'}}>Ronit</div>
+        <div style={{fontSize:12,color:'rgba(255,255,255,0.5)',marginTop:3}}>Virtual Communication Gateway</div>
+        <div style={{display:'flex',gap:8,marginTop:14,flexWrap:'wrap'}}>
+          {[{l:'Student',v:'MI6228'},{l:'Group',v:'13'},{l:'Mentor',v:'Paolo C.'},{l:'Protocol',v:'IEEE 2030.5'}].map(x=>(
+            <div key={x.l} style={{background:'rgba(255,255,255,0.06)',borderRadius:10,padding:'6px 12px',border:'1px solid rgba(230,57,70,0.2)'}}>
+              <div style={{fontSize:8,color:'rgba(255,255,255,0.4)',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:1.2}}>{x.l}</div>
+              <div style={{fontSize:13,fontWeight:800,color:'#ffd60a'}}>{x.v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* API Health Monitor */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
+          <span>⏱️</span> API Health Monitor
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {ENDPOINTS.map(ep=>{
+            const h=endpointHealth?.[ep]
+            const color=!h?T.text3:h.status==='ok'?'#10b981':h.status==='checking'?'#f59e0b':'#e63946'
+            return (
+              <div key={ep} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:T.bg,borderRadius:12,border:`1px solid ${color}20`}}>
+                <div style={{width:8,height:8,borderRadius:'50%',background:color,boxShadow:`0 0 6px ${color}`,flexShrink:0}}/>
+                <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:T.text,flex:1}}>{ep}</span>
+                {h?.status==='checking'&&<div style={{width:12,height:12,border:`2px solid ${color}`,borderTopColor:'transparent',borderRadius:'50%',animation:'spin 1s linear infinite'}}/>}
+                {h?.status==='ok'&&<span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'#10b981'}}>{h.latency}ms ✓</span>}
+                {h?.status==='error'&&<span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'#e63946'}}>ERROR</span>}
+                {!h&&<span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>NOT CHECKED</span>}
+              </div>
+            )
+          })}
+        </div>
+        <button onClick={onRefresh} style={{...ironBtn({}),marginTop:12}}>↺ Check All Endpoints</button>
+      </div>
+
+      {/* PIN Lock */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
+          <span>🔐</span> PIN Lock
+          <div style={{marginLeft:'auto',fontFamily:"'Share Tech Mono',monospace",fontSize:10,padding:'3px 10px',borderRadius:20,background:pinLocked&&savedPin?'rgba(16,185,129,0.2)':'rgba(230,57,70,0.2)',border:`1px solid ${pinLocked&&savedPin?'#10b981':'#e63946'}60`,color:pinLocked&&savedPin?'#10b981':'#e63946'}}>{pinLocked&&savedPin?'ENABLED':'DISABLED'}</div>
+        </div>
+
+        {pinMode==='view'&&(
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>setPinMode('set')} style={{...ironBtn({}),flex:1,padding:'10px'}}>{savedPin?'Change PIN':'Set PIN'}</button>
+            {savedPin&&<button onClick={()=>onPinChange('')} style={{background:'#fef2f2',border:'1px solid rgba(230,57,70,0.3)',borderRadius:12,padding:'10px 16px',fontWeight:700,fontSize:12,color:'#e63946',cursor:'pointer'}}>Remove</button>}
+          </div>
+        )}
+
+        {pinMode==='set'&&(
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            <input type="password" maxLength={4} placeholder="New PIN (4 digits)" value={newPin}
+              onChange={e=>setNewPin(e.target.value.replace(/\D/g,'').slice(0,4))}
+              style={{padding:'11px 14px',border:`1.5px solid ${T.border}`,borderRadius:12,fontSize:18,fontFamily:"'Orbitron',monospace",color:T.text,background:T.bg,outline:'none',textAlign:'center',letterSpacing:8}}/>
+            <input type="password" maxLength={4} placeholder="Confirm PIN" value={confirmPin}
+              onChange={e=>setConfirmPin(e.target.value.replace(/\D/g,'').slice(0,4))}
+              style={{padding:'11px 14px',border:`1.5px solid ${T.border}`,borderRadius:12,fontSize:18,fontFamily:"'Orbitron',monospace",color:T.text,background:T.bg,outline:'none',textAlign:'center',letterSpacing:8}}/>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={savePin} style={{...ironBtn({}),flex:1}}>Save PIN</button>
+              <button onClick={()=>{setPinMode('view');setNewPin('');setConfirmPin('');setPinMsg('')}} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:'10px 16px',fontWeight:700,fontSize:12,color:T.text2,cursor:'pointer'}}>Cancel</button>
+            </div>
+            {pinMsg&&<div style={{fontSize:12,fontWeight:600,color:pinMsg.startsWith('✅')?'#10b981':'#e63946',textAlign:'center'}}>{pinMsg}</div>}
+          </div>
+        )}
+      </div>
+
+      {/* Theme + Appearance */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14}}>🎨 Appearance</div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:T.bg,borderRadius:14,border:`1px solid ${T.border}`}}>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <span style={{fontSize:24}}>{darkMode?'🌙':'☀️'}</span>
+            <div><div style={{fontWeight:700,fontSize:14,color:T.text}}>{darkMode?'Iron Man Dark':'Light Mode'}</div><div style={{fontSize:12,color:T.text2}}>Tap to switch theme</div></div>
+          </div>
+          <button onClick={onToggleDark} style={{background:darkMode?'linear-gradient(135deg,#8b0000,#e63946)':'linear-gradient(135deg,#b8860b,#ffd60a)',color:darkMode?'#fff':'#0d1117',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+            {darkMode?'Go Light':'Go Dark'}
+          </button>
+        </div>
+      </div>
+
+      {/* PWA Install */}
+      {(canInstall||installed)&&(
+        <div style={cardStyle({border:`1px solid ${installed?'#10b98140':'#58c4dc40'}`})}>
+          <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+            <span>📱</span> Install App
+            {installed&&<div style={{marginLeft:'auto',fontFamily:"'Share Tech Mono',monospace",fontSize:10,padding:'3px 10px',borderRadius:20,background:'rgba(16,185,129,0.2)',border:'1px solid rgba(16,185,129,0.4)',color:'#10b981'}}>INSTALLED ✓</div>}
+          </div>
+          {!installed?(
+            <div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:12}}>Install VCG Portal as a native app on your device. Works offline, loads instantly!</div>
+              <button onClick={onInstall} style={{background:'linear-gradient(135deg,#0d4f6e,#58c4dc)',color:'#fff',border:'none',borderRadius:14,padding:'13px',fontWeight:800,fontSize:14,cursor:'pointer',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 16px rgba(88,196,220,0.4)'}}>
+                📲 Install on this device
+              </button>
+            </div>
+          ):(
+            <div style={{fontSize:13,color:'#10b981',fontWeight:600,textAlign:'center',padding:'8px 0'}}>✅ VCG Portal is installed on your device!</div>
+          )}
+        </div>
+      )}
+
+      {/* QR Share */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14}}>📲 Share App</div>
+        <div style={{display:'flex',alignItems:'center',gap:14}}>
+          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=88x88&data=https://vcg-webapp.vercel.app&color=c1121f&bgcolor=ffffff&qzone=1`} width={88} height={88} alt="QR" style={{borderRadius:12,border:'2px solid #e63946',boxShadow:'0 0 16px rgba(230,57,70,0.3)'}}/>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'#e63946',marginBottom:4}}>vcg-webapp.vercel.app</div>
+            <div style={{fontSize:12,color:T.text2,marginBottom:10}}>Scan to open on any device</div>
+            <button onClick={onShowQR} style={ironBtn({padding:'9px 16px',width:'auto',fontSize:12})}>📲 Full QR</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Links */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:15,color:T.text,marginBottom:14}}>🔗 Quick Links</div>
+        {[{icon:'🚀',l:'Live API Docs',sub:'virtual-gateway.onrender.com/docs',href:'https://virtual-gateway.onrender.com/docs'},{icon:'💻',l:'GitHub',sub:'rt0181996/virtual-gateway',href:'https://github.com/rt0181996/virtual-gateway'},{icon:'📊',l:'Grafana',sub:'localhost:3000',href:'http://localhost:3000'},{icon:'🌐',l:'IDS Dataspace',sub:'localhost:8181',href:'http://localhost:8181'}].map((x,i)=>(
+          <a key={x.l} href={x.href} target="_blank" rel="noopener" style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0',borderBottom:i<3?`1px solid ${T.border}`:'none',textDecoration:'none'}}>
+            <div style={{width:38,height:38,borderRadius:12,background:'rgba(230,57,70,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>{x.icon}</div>
+            <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:T.text}}>{x.l}</div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3}}>{x.sub}</div></div>
+            <span style={{color:T.text3,fontSize:18}}>›</span>
+          </a>
+        ))}
+      </div>
+      <div style={{textAlign:'center',padding:8,fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3,letterSpacing:1.5}}>VCG v10.0 · IRON MAN EDITION ⚡</div>
     </div>
   )
 }
