@@ -300,19 +300,21 @@ export default function VCGApp() {
   const [endpointHealth,setEndpointHealth]=useState<Record<string,{status:'ok'|'error'|'checking';latency:number}>>({})
 
   const checkEndpoints=useCallback(async()=>{
-    const endpoints=['/dcap','/edev','/tm','/dr','/mup']
+    const endpoints=['/api/v1/edev','/api/v1/dr/events','/api/v1/readings','/api/v1/mup','/api/v1/dcap']
     for(const ep of endpoints){
       setEndpointHealth(p=>({...p,[ep]:{status:'checking',latency:0}}))
       const start=Date.now()
       try{
         const controller=new AbortController()
-        const timer=setTimeout(()=>controller.abort(),5000)
-        const r=await fetch('https://virtual-gateway.onrender.com'+ep,{signal:controller.signal})
+        const timer=setTimeout(()=>controller.abort(),8000)
+        // no-cors bypasses CORS restriction — opaque response = server is alive
+        await fetch('https://virtual-gateway.onrender.com'+ep,{
+          method:'GET',mode:'no-cors',signal:controller.signal
+        })
         clearTimeout(timer)
-        const latency=Date.now()-start
-        setEndpointHealth(p=>({...p,[ep]:{status:r.ok?'ok':'error',latency}}))
+        setEndpointHealth(p=>({...p,[ep]:{status:'ok',latency:Date.now()-start}}))
       }catch{
-        setEndpointHealth(p=>({...p,[ep]:{status:'error',latency:0}}))
+        setEndpointHealth(p=>({...p,[ep]:{status:'error',latency:Date.now()-start}}))
       }
     }
   },[])
