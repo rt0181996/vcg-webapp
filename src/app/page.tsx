@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 const API = 'https://virtual-gateway.onrender.com'
+const API_V1 = 'https://virtual-gateway.onrender.com/api/v1'
 const FIWARE = 'http://localhost:1026' // Local Orion broker
 const APP_URL = 'https://vcg-webapp.vercel.app'
 
@@ -306,7 +307,7 @@ export default function VCGApp() {
       try{
         const controller=new AbortController()
         const timer=setTimeout(()=>controller.abort(),5000)
-        const r=await fetch(API+ep,{signal:controller.signal})
+        const r=await fetch('https://virtual-gateway.onrender.com'+ep,{signal:controller.signal})
         clearTimeout(timer)
         const latency=Date.now()-start
         setEndpointHealth(p=>({...p,[ep]:{status:r.ok?'ok':'error',latency}}))
@@ -1120,7 +1121,7 @@ function SimulatorScreen({T,blocks,apiOnline,isOffline,onDeviceAdded,addNotifica
   const sendReading=async(reading:SimReading):Promise<boolean>=>{
     if(isOffline) return false
     try {
-      const r=await fetch(API+'/edev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sfdi:reading.deviceId,lfdi:'LFDI-'+reading.deviceId,deviceType:reading.type,block:reading.block,realPower:reading.power,voltage:reading.voltage,temperature:reading.temperature})})
+      const r=await fetch(API_V1+'/edev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sfdi:reading.deviceId,lfdi:'LFDI-'+reading.deviceId,deviceType:reading.type,block:reading.block,realPower:reading.power,voltage:reading.voltage,temperature:reading.temperature})})
       return r.ok
     } catch { return false }
   }
@@ -1708,7 +1709,7 @@ function RegisterScreen({T,blocks,activeBlock,onBack,apiOnline,onDeviceAdded,car
   const submit=async()=>{
     if(!form.sfdi||!form.lfdi){setMsg('⚠️ SFDI and LFDI required');return}
     setLoading(true)
-    try{const r=await fetch(API+'/edev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});if(r.ok){onDeviceAdded({...form,status:'Online',power:+form.realPower||0,voltage:+form.voltage||0,lastSeen:'Just now'});setMsg('✅ Registered!')}else setMsg('❌ Failed')}
+    try{const r=await fetch(API_V1+'/edev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});if(r.ok){onDeviceAdded({...form,status:'Online',power:+form.realPower||0,voltage:+form.voltage||0,lastSeen:'Just now'});setMsg('✅ Registered!')}else setMsg('❌ Failed')}
     catch{onDeviceAdded({...form,status:'Online',power:+form.realPower||0,voltage:+form.voltage||0,lastSeen:'Just now'});setMsg('📴 Saved locally')}
     setLoading(false);setTimeout(()=>setMsg(''),3000)
   }
@@ -2332,7 +2333,7 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStar
     {icon:'📊',label:'Import Excel', s:'import',      c:'#10b981'},
   ]
 
-  const ENDPOINTS=['/dcap','/edev','/tm','/dr','/mup']
+  const ENDPOINTS=['/api/v1/edev','/api/v1/dr/events','/api/v1/readings','/api/v1/mup','/api/v1/dcap']
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
