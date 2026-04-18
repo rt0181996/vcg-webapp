@@ -1255,7 +1255,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
           {(allDevices||devices).slice(0,6).map((d:any,i:number)=>{
             const total=Math.min((allDevices||devices).length,6)
             const angle=(i/total)*2*Math.PI - Math.PI/2
-            const r=105
+            const r=95
             const x=160+r*Math.cos(angle), y=160+r*Math.sin(angle)
             const icons:Record<string,string>={'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗','Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️','Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋','HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️','MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧','PressureSensor':'🌀','SmartMeter':'⚡'}
             const icon=icons[d.type]||'📟'
@@ -1267,15 +1267,35 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
                   stroke={isOnline?'rgba(16,185,129,0.4)':'rgba(230,57,70,0.3)'}
                   strokeWidth={1} strokeDasharray="3,4"/>
                 {/* Device circle */}
-                <circle cx={x} cy={y} r={20}
+                <circle cx={x} cy={y} r={18}
                   fill={isOnline?'rgba(16,185,129,0.15)':'rgba(230,57,70,0.15)'}
                   stroke={isOnline?'#10b981':'#e63946'} strokeWidth={1.5}/>
                 {/* Icon */}
-                <text x={x} y={y+5} textAnchor="middle" fontSize="14">{icon}</text>
+                <text x={x} y={y+5} textAnchor="middle" fontSize="12">{icon}</text>
                 {/* Device type below circle */}
                 <text x={x} y={y+32} textAnchor="middle" fontSize="6.5"
                   fill={isOnline?'#10b981':'rgba(255,255,255,0.4)'}
-                  fontFamily="Share Tech Mono,monospace">{(d.type||'').replace('Sensor','').replace('Inverter','Inv').slice(0,8)}</text>
+                  fontFamily="Share Tech Mono,monospace">{
+                  (d.type||'')
+                    .replace('TemperatureSensor','Temp')
+                    .replace('HumiditySensor','Humidity')
+                    .replace('BatterySensor','Battery')
+                    .replace('CO2Sensor','CO2')
+                    .replace('LightSensor','Light')
+                    .replace('MotionSensor','Motion')
+                    .replace('DoorSensor','Door')
+                    .replace('FlowSensor','Flow')
+                    .replace('PressureSensor','Pressure')
+                    .replace('SmartMeter','SmartMeter')
+                    .replace('Solar Inverter','Solar')
+                    .replace('EV Charger','EV')
+                    .replace('Wind Turbine','Wind')
+                    .replace('Battery Storage','Battery')
+                    .replace('Smart Meter','SmartMeter')
+                    .replace('Load Controller','Load')
+                    .replace('HVAC Unit','HVAC')
+                    .slice(0,9)
+                }</text>
               </g>
             )
           })}
