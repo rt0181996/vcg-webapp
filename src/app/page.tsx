@@ -1252,15 +1252,31 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
 
 
           {/* Device nodes around reactor */}
-          {/* Rotating container - anti-clockwise */}
-          <g style={{animation:'arcR2 20s linear infinite',transformOrigin:'160px 160px'}}>
           {(allDevices||devices).slice(0,6).map((d:any,i:number)=>{
             const total=Math.min((allDevices||devices).length,6)
-            const angle=(i/total)*2*Math.PI - Math.PI/2
+            // Static positions - no rotation to keep text upright
+            const baseAngle=(i/total)*2*Math.PI - Math.PI/2
             const r=95
-            const x=160+r*Math.cos(angle), y=160+r*Math.sin(angle)
-            const icons:Record<string,string>={'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗','Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️','Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋','HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️','MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧','PressureSensor':'🌀','SmartMeter':'⚡'}
+            const x=160+r*Math.cos(baseAngle), y=160+r*Math.sin(baseAngle)
+            const icons:Record<string,string>={
+              'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗',
+              'Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️',
+              'Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋',
+              'HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️',
+              'MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧',
+              'PressureSensor':'🌀','SmartMeter':'⚡'
+            }
+            const typeLabels:Record<string,string>={
+              'TemperatureSensor':'Temp','HumiditySensor':'Humidity',
+              'BatterySensor':'Battery','CO2Sensor':'CO2','LightSensor':'Light',
+              'MotionSensor':'Motion','DoorSensor':'Door','FlowSensor':'Flow',
+              'PressureSensor':'Pressure','SmartMeter':'SmartMeter',
+              'Solar Inverter':'Solar','EV Charger':'EV Charger',
+              'Wind Turbine':'Wind','Battery Storage':'Battery',
+              'Smart Meter':'SmartMeter','Load Controller':'Load','HVAC Unit':'HVAC'
+            }
             const icon=icons[d.type]||'📟'
+            const label=typeLabels[d.type]||d.type||''
             const isOnline=d.status==='Online'
             return (
               <g key={d.sfdi||i}>
@@ -1268,40 +1284,29 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
                 <line x1={160} y1={160} x2={x} y2={y}
                   stroke={isOnline?'rgba(16,185,129,0.4)':'rgba(230,57,70,0.3)'}
                   strokeWidth={1} strokeDasharray="3,4"/>
+                {/* Pulsing outer ring */}
+                <circle cx={x} cy={y} r={22}
+                  fill="none"
+                  stroke={isOnline?'rgba(16,185,129,0.2)':'rgba(230,57,70,0.15)'}
+                  strokeWidth={1}/>
                 {/* Device circle */}
                 <circle cx={x} cy={y} r={18}
                   fill={isOnline?'rgba(16,185,129,0.15)':'rgba(230,57,70,0.15)'}
                   stroke={isOnline?'#10b981':'#e63946'} strokeWidth={1.5}/>
-                {/* Icon */}
+                {/* Icon - always upright */}
                 <text x={x} y={y+5} textAnchor="middle" fontSize="12">{icon}</text>
-                {/* Device type below circle */}
-                <text x={x} y={y+32} textAnchor="middle" fontSize="6.5"
+                {/* Type label - always upright */}
+                <text x={x} y={y+32} textAnchor="middle" fontSize="7"
                   fill={isOnline?'#10b981':'rgba(255,255,255,0.4)'}
-                  fontFamily="Share Tech Mono,monospace">{
-                  (d.type||'')
-                    .replace('TemperatureSensor','Temp')
-                    .replace('HumiditySensor','Humidity')
-                    .replace('BatterySensor','Battery')
-                    .replace('CO2Sensor','CO2')
-                    .replace('LightSensor','Light')
-                    .replace('MotionSensor','Motion')
-                    .replace('DoorSensor','Door')
-                    .replace('FlowSensor','Flow')
-                    .replace('PressureSensor','Pressure')
-                    .replace('SmartMeter','SmartMeter')
-                    .replace('Solar Inverter','Solar')
-                    .replace('EV Charger','EV')
-                    .replace('Wind Turbine','Wind')
-                    .replace('Battery Storage','Battery')
-                    .replace('Smart Meter','SmartMeter')
-                    .replace('Load Controller','Load')
-                    .replace('HVAC Unit','HVAC')
-                    .slice(0,9)
-                }</text>
+                  fontFamily="Share Tech Mono,monospace">{label.slice(0,10)}</text>
               </g>
             )
           })}
-          </g>
+          {/* Orbit ring rotates anti-clockwise */}
+          <circle cx={160} cy={160} r={95} fill="none"
+            stroke="rgba(88,196,220,0.15)" strokeWidth={1}
+            strokeDasharray="4,8"
+            style={{animation:'arcR2 15s linear infinite',transformOrigin:'160px 160px'}}/>
 
           {/* No devices placeholder */}
           {(allDevices||devices).length===0&&(
@@ -1327,14 +1332,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
             {/* Inner gold ring */}
             <circle cx={160} cy={160} r={28} fill="none" stroke="rgba(255,214,10,0.4)" strokeWidth={1}
               style={{animation:'arcR2 6s linear infinite',transformOrigin:'160px 160px'}}/>
-            {/* Hex dots on reactor */}
-            {[0,60,120,180,240,300].map((angle:number)=>{
-              const rx=160+42*Math.cos(angle*Math.PI/180)
-              const ry=160+42*Math.sin(angle*Math.PI/180)
-              return <circle key={angle} cx={rx} cy={ry} r={4} fill="#58c4dc"
-                style={{animation:`arcHex 2s ease-in-out infinite`,animationDelay:`${angle/360}s`}}
-                filter="url(#glow)"/>
-            })}
+
             {/* Core circle */}
             <circle cx={160} cy={160} r={22} fill="url(#coreGrad)"
               style={{animation:'arcCore 2.5s ease-in-out infinite',transformOrigin:'160px 160px'}}/>
