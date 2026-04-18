@@ -1266,10 +1266,26 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
           {/* Device nodes around reactor */}
           {(allDevices||devices).slice(0,6).map((d:any,i:number)=>{
             const total=Math.min((allDevices||devices).length,6)
-            // Static positions - no rotation to keep text upright
             const baseAngle=(i/total)*2*Math.PI - Math.PI/2
             const r=95
             const x=160+r*Math.cos(baseAngle), y=160+r*Math.sin(baseAngle)
+            // Get sensor value for this device type
+            const sensorVal=(()=>{
+              const typeToSensor:Record<string,string>={
+                'SmartMeter':'Energy Meter','Smart Meter':'Energy Meter',
+                'Solar Inverter':'Solar Irradiance','TemperatureSensor':'Temperature',
+                'BatterySensor':'Battery SOC','Battery Storage':'Battery SOC',
+                'HumiditySensor':'Humidity','CO2Sensor':'CO₂ Level',
+                'LightSensor':'Solar Irradiance','Wind Turbine':'Wind Speed',
+                'EV Charger':'Grid Import','MotionSensor':'Motion',
+              }
+              const sLabel=typeToSensor[d.type]
+              if(sLabel){
+                const s=sensors.find((x:any)=>x.label===sLabel||x.label.includes(sLabel.split(' ')[0]))
+                if(s) return `${s.value}${s.unit}`
+              }
+              return null
+            })()
             const icons:Record<string,string>={
               'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗',
               'Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️',
@@ -1307,10 +1323,16 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
                   stroke={isOnline?'#10b981':'#e63946'} strokeWidth={1.5}/>
                 {/* Icon - always upright */}
                 <text x={x} y={y+5} textAnchor="middle" fontSize="12">{icon}</text>
-                {/* Type label - always upright */}
+                {/* Type label */}
                 <text x={x} y={y+32} textAnchor="middle" fontSize="7"
                   fill={isOnline?'#10b981':'rgba(255,255,255,0.4)'}
                   fontFamily="Share Tech Mono,monospace">{label.slice(0,10)}</text>
+                {/* Sensor value or power label */}
+                <text x={x} y={y+43} textAnchor="middle" fontSize="7"
+                  fill="rgba(255,214,10,0.9)"
+                  fontFamily="Share Tech Mono,monospace">
+                  {sensorVal||(d.power&&d.power>0?(d.power>=1000?(d.power/1000).toFixed(1)+'kW':d.power+'W'):(d.voltage?d.voltage+'V':''))}
+                </text>
               </g>
             )
           })}
