@@ -182,20 +182,32 @@ export default function VCGApp() {
     return ()=>{ window.removeEventListener('online',handleOnline); window.removeEventListener('offline',handleOffline) }
   },[])
 
-  // ── Live data fluctuation ────────────────────────────────────────────────
+  // ── Live data — NO fluctuation, only updates from real imports ──────────
+  // Data stays fixed until new CSV is uploaded or API sync happens
   useEffect(()=>{
+    // Only update history timestamps, no value changes
     const iv=setInterval(()=>{
-      setBlocks(p=>p.map(b=>{
-        const gen=+(b.generation+(Math.random()-0.5)*2).toFixed(1)
-        const con=+(b.consumption+(Math.random()-0.5)*1.5).toFixed(1)
-        const net=+(gen-con).toFixed(1)
-        return{...b,generation:gen,consumption:con,net,status:net>0.5?'Surplus':net<-0.5?'Deficit':'Balanced'}
-      }))
-      setSensors(p=>{const n={...p};Object.keys(n).forEach(k=>{n[k]=n[k].map((s,i)=>{const d=[0.3,8,1.5,0.04,0.08,0.8,0.004,0.08][i]||0.1;return{...s,value:+(s.value+(Math.random()-0.5)*d).toFixed(s.value<10?2:1)}})});return n})
-      setHistory(p=>{const n={...p};INIT_BLOCKS.forEach(b=>{const gen=+(100+Math.random()*100).toFixed(1),con=+(70+Math.random()*90).toFixed(1);const e:HistoryEntry={time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),block:b.id,generation:gen,consumption:con,net:+(gen-con).toFixed(1),cost:+(con*0.38/1000*3600).toFixed(3)};n[b.id]=[...(n[b.id]||[]).slice(-20),e]});return n})
-    },3000)
+      setHistory(p=>{
+        const n={...p}
+        blocks.forEach(b=>{
+          const lastEntry=n[b.id]?.[n[b.id].length-1]
+          if(lastEntry){
+            const e:HistoryEntry={
+              time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),
+              block:b.id,
+              generation:b.generation,
+              consumption:b.consumption,
+              net:b.net,
+              cost:+(b.consumption*0.38/1000*3600).toFixed(3)
+            }
+            n[b.id]=[...(n[b.id]||[]).slice(-20),e]
+          }
+        })
+        return n
+      })
+    },30000) // update history every 30s not 3s
     return ()=>clearInterval(iv)
-  },[])
+  },[blocks])
 
   // ── 4. Auto notifications ───────────────────────────────────────────────
   useEffect(()=>{
