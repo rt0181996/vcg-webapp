@@ -663,7 +663,7 @@ export default function VCGApp() {
         {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} darkMode={darkMode} />}
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='fiware'    && <FIWAREScreen    T={T} blocks={blocks} sensors={sensors} apiOnline={apiOnline} isOffline={isOffline} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} />}
-        {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={()=>{checkApi();checkEndpoints()}} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} endpointHealth={endpointHealth} pinLocked={pinLocked} savedPin={savedPin} onPinChange={(pin:string)=>{setSavedPin(pin);if(pin){localStorage.setItem('vcg_pin',pin);localStorage.setItem('vcg_pin_enabled','true');setPinLocked(true)}else{localStorage.removeItem('vcg_pin');localStorage.setItem('vcg_pin_enabled','false');setPinLocked(false)}}} />}
+        {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={()=>{checkApi();checkEndpoints()}} onSyncAll={async()=>{await loadDevicesFromAPI();await loadGroup12FromAPI();await loadBlocksFromAPI();addNotification({title:'🔄 Sync Complete',message:'All data loaded from API',type:'success'})}} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} endpointHealth={endpointHealth} pinLocked={pinLocked} savedPin={savedPin} onPinChange={(pin:string)=>{setSavedPin(pin);if(pin){localStorage.setItem('vcg_pin',pin);localStorage.setItem('vcg_pin_enabled','true');setPinLocked(true)}else{localStorage.removeItem('vcg_pin');localStorage.setItem('vcg_pin_enabled','false');setPinLocked(false)}}} />}
       </div>
 
       {/* BOTTOM NAV */}
@@ -2672,7 +2672,7 @@ function NGSIScreen({T,blocks,onBlocksImported,cardStyle,ironBtn}:any) {
 }
 
 // ── UPDATE SETTINGS: Add PIN, Demo, Health Monitor ────────────────────────────
-function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStartDemo,darkMode,onToggleDark,isOffline,cardStyle,ironBtn,goldBtn,pinLocked,savedPin,onPinChange,endpointHealth,canInstall,installed,onInstall}:any) {
+function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStartDemo,darkMode,onToggleDark,isOffline,cardStyle,ironBtn,goldBtn,pinLocked,savedPin,onPinChange,endpointHealth,canInstall,installed,onInstall,onSyncAll}:any) {
   const [pinInput,setPinInput]=useState('')
   const [pinMode,setPinMode]=useState<'view'|'set'|'change'>('view')
   const [newPin,setNewPin]=useState('')
@@ -2759,6 +2759,9 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStar
           })}
         </div>
         <button onClick={onRefresh} style={{...ironBtn({}),marginTop:12}}>↺ Check All Endpoints</button>
+        <button onClick={onSyncAll} style={{background:'linear-gradient(135deg,#0d4f6e,#58c4dc)',color:'#fff',border:'none',borderRadius:14,padding:'13px',fontWeight:800,fontSize:14,cursor:'pointer',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 16px rgba(88,196,220,0.4)',marginTop:8}}>
+          🔄 Force Sync All Data
+        </button>
       </div>
 
       {/* PIN Lock */}
