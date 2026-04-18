@@ -663,7 +663,14 @@ export default function VCGApp() {
         {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} darkMode={darkMode} />}
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='fiware'    && <FIWAREScreen    T={T} blocks={blocks} sensors={sensors} apiOnline={apiOnline} isOffline={isOffline} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} />}
-        {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={()=>{checkApi();checkEndpoints()}} onSyncAll={async()=>{await loadDevicesFromAPI();await loadGroup12FromAPI();await loadBlocksFromAPI();addNotification({title:'🔄 Sync Complete',message:'All data loaded from API',type:'success'})}} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} endpointHealth={endpointHealth} pinLocked={pinLocked} savedPin={savedPin} onPinChange={(pin:string)=>{setSavedPin(pin);if(pin){localStorage.setItem('vcg_pin',pin);localStorage.setItem('vcg_pin_enabled','true');setPinLocked(true)}else{localStorage.removeItem('vcg_pin');localStorage.setItem('vcg_pin_enabled','false');setPinLocked(false)}}} />}
+        {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={()=>{checkApi();checkEndpoints()}} onSyncAll={async()=>{
+  await loadDevicesFromAPI()
+  await loadGroup12FromAPI()
+  await loadBlocksFromAPI()
+  addNotification({title:'🔄 Sync Complete',message:'All data loaded from API',type:'success'})
+  // Go home and back to force refresh
+  if(screen==='block'){goHome()}
+}} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} endpointHealth={endpointHealth} pinLocked={pinLocked} savedPin={savedPin} onPinChange={(pin:string)=>{setSavedPin(pin);if(pin){localStorage.setItem('vcg_pin',pin);localStorage.setItem('vcg_pin_enabled','true');setPinLocked(true)}else{localStorage.removeItem('vcg_pin');localStorage.setItem('vcg_pin_enabled','false');setPinLocked(false)}}} />}
       </div>
 
       {/* BOTTOM NAV */}
@@ -1265,10 +1272,10 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
                   stroke={isOnline?'#10b981':'#e63946'} strokeWidth={1.5}/>
                 {/* Icon */}
                 <text x={x} y={y+5} textAnchor="middle" fontSize="14">{icon}</text>
-                {/* Device ID below circle */}
+                {/* Device type below circle */}
                 <text x={x} y={y+32} textAnchor="middle" fontSize="6.5"
                   fill={isOnline?'#10b981':'rgba(255,255,255,0.4)'}
-                  fontFamily="Share Tech Mono,monospace">{(d.sfdi||d.type||'').slice(-5)}</text>
+                  fontFamily="Share Tech Mono,monospace">{(d.type||'').replace('Sensor','').replace('Inverter','Inv').slice(0,8)}</text>
               </g>
             )
           })}
@@ -3172,7 +3179,7 @@ function Group12Screen({T,onBack,onImport,cardStyle,ironBtn}:any) {
                 background:'rgba(16,185,129,0.12)',
                 border:'1px solid rgba(16,185,129,0.3)',
                 fontSize:14,fontWeight:800,color:'#10b981',textAlign:'center'}}>
-              ✅ Group 12 data imported! Check Home screen.
+              ✅ Group 12 data imported! Open any block to see their devices in the Arc Reactor.
             </div>
           }
         </>
