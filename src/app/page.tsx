@@ -1242,34 +1242,33 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
 
         {/* Main reactor SVG with connected devices */}
         <svg width="100%" viewBox="0 0 320 320" style={{display:'block',overflow:'visible'}}>
-          {/* Connection lines from reactor to devices */}
-          {devices.slice(0,6).map((_:any,i:number)=>{
-            const angle=(i/Math.min(devices.length,6))*2*Math.PI - Math.PI/2
-            const x2=160+120*Math.cos(angle), y2=160+120*Math.sin(angle)
-            return (
-              <line key={i} x1={160} y1={160} x2={x2} y2={y2}
-                stroke="rgba(88,196,220,0.3)" strokeWidth={1}
-                strokeDasharray="4,4"
-                style={{animation:'lineFlow 1s linear infinite',animationDelay:`${i*0.15}s`}}/>
-            )
-          })}
+
 
           {/* Device nodes around reactor */}
-          {(allDevices||devices).slice(0,6).map((d:Device,i:number)=>{
-            const angle=(i/Math.min(devices.length,6))*2*Math.PI - Math.PI/2
-            const x=160+120*Math.cos(angle), y=160+120*Math.sin(angle)
-            const icons:Record<string,string>={'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗','Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️','Load Controller':'🔌'}
+          {(allDevices||devices).slice(0,6).map((d:any,i:number)=>{
+            const total=Math.min((allDevices||devices).length,6)
+            const angle=(i/total)*2*Math.PI - Math.PI/2
+            const r=105
+            const x=160+r*Math.cos(angle), y=160+r*Math.sin(angle)
+            const icons:Record<string,string>={'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗','Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️','Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋','HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️','MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧','PressureSensor':'🌀','SmartMeter':'⚡'}
             const icon=icons[d.type]||'📟'
             const isOnline=d.status==='Online'
             return (
-              <g key={d.sfdi} style={{animation:'devPulse 2s ease-in-out infinite',animationDelay:`${i*0.3}s`}}>
-                <circle cx={x} cy={y} r={24} fill={isOnline?'rgba(16,185,129,0.15)':'rgba(230,57,70,0.15)'}
+              <g key={d.sfdi||i}>
+                {/* Connection line */}
+                <line x1={160} y1={160} x2={x} y2={y}
+                  stroke={isOnline?'rgba(16,185,129,0.4)':'rgba(230,57,70,0.3)'}
+                  strokeWidth={1} strokeDasharray="3,4"/>
+                {/* Device circle */}
+                <circle cx={x} cy={y} r={20}
+                  fill={isOnline?'rgba(16,185,129,0.15)':'rgba(230,57,70,0.15)'}
                   stroke={isOnline?'#10b981':'#e63946'} strokeWidth={1.5}/>
-                <text x={x} y={y+1} textAnchor="middle" dominantBaseline="middle" fontSize="16">{icon}</text>
-                <text x={x} y={y+18} textAnchor="middle" fontSize="7" fill={isOnline?'#10b981':'#e63946'}
-                  fontFamily="Share Tech Mono,monospace">{d.sfdi.slice(-6)}</text>
-                {d.power&&d.power>0&&<text x={x} y={y+27} textAnchor="middle" fontSize="6.5"
-                  fill="rgba(255,214,10,0.8)" fontFamily="Share Tech Mono,monospace">{(d.power/1000).toFixed(1)}kW</text>}
+                {/* Icon */}
+                <text x={x} y={y+5} textAnchor="middle" fontSize="14">{icon}</text>
+                {/* Device ID below circle */}
+                <text x={x} y={y+32} textAnchor="middle" fontSize="6.5"
+                  fill={isOnline?'#10b981':'rgba(255,255,255,0.4)'}
+                  fontFamily="Share Tech Mono,monospace">{(d.sfdi||d.type||'').slice(-5)}</text>
               </g>
             )
           })}
