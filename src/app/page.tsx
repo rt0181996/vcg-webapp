@@ -386,7 +386,7 @@ export default function VCGApp() {
     try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
     // Sync to API
     if(devices.length>0){
-      fetch(BLOCKS_API+'/devices/sync',{
+      fetch(API_V1+'/devices/sync',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({devices})
@@ -396,7 +396,7 @@ export default function VCGApp() {
 
   const loadDevicesFromAPI=useCallback(async()=>{
     try{
-      const r=await fetch(BLOCKS_API+'/devices/sync')
+      const r=await fetch(API_V1+'/devices/sync')
       if(r.ok){
         const d=await r.json()
         if(d.devices&&d.devices.length>0){
