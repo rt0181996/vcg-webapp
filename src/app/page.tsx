@@ -1187,64 +1187,170 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,
       </div>
       {recentH.length>0&&<><SH T={T} title="Energy Trend" /><div style={cardStyle({padding:'14px 10px'})}><BarChart data={recentH.map((h:HistoryEntry)=>({label:h.time,values:[+h.generation,+h.consumption]}))} colors={[T.green,T.red]} height={90} T={T}/></div></>}
       <SH T={T} title="Sensor Parameters" />
-      {/* Circular gauges with Iron Man Arc Reactor center */}
-      <div style={cardStyle({background:darkMode?'rgba(13,17,23,0.95)':'rgba(255,255,255,0.95)',border:'1px solid rgba(255,214,10,0.2)',padding:'20px 16px'})}>
-        <div style={{fontWeight:700,fontSize:12,color:T.text2,marginBottom:16,fontFamily:"'Share Tech Mono',monospace",letterSpacing:1,textTransform:'uppercase' as const}}>Key Metrics</div>
-        <div style={{position:'relative',display:'flex',justifyContent:'space-around',alignItems:'center',flexWrap:'wrap',gap:8}}>
-          {/* Top 2 gauges */}
-          <div style={{display:'flex',justifyContent:'space-around',width:'100%',marginBottom:8}}>
-            {sensors.slice(0,2).map((s:Sensor)=>(
-              <CircularGauge key={s.label} value={+s.value} max={s.label==='Temperature'?50:s.label==='Solar Irradiance'?1000:s.label==='Battery SOC'?100:10} label={s.label} unit={s.unit} color={s.color} size={85}/>
+      {/* Iron Man Arc Reactor — connected to devices and live energy */}
+      <div style={{background:'#0a0c10',borderRadius:24,padding:20,border:'1px solid rgba(255,214,10,0.2)',boxShadow:'0 8px 32px rgba(0,0,0,0.6)'}}>
+        <style>{`
+          @keyframes arcR1{to{transform:rotate(360deg)}}
+          @keyframes arcR2{to{transform:rotate(-360deg)}}
+          @keyframes arcCore{0%,100%{box-shadow:0 0 16px rgba(88,196,220,0.9),0 0 32px rgba(88,196,220,0.4),inset 0 0 16px rgba(88,196,220,0.3)}50%{box-shadow:0 0 32px rgba(88,196,220,1),0 0 64px rgba(88,196,220,0.5),0 0 100px rgba(255,214,10,0.15),inset 0 0 24px rgba(88,196,220,0.6)}}
+          @keyframes arcHex{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+          @keyframes devPulse{0%,100%{opacity:0.4;transform:scale(0.95)}50%{opacity:1;transform:scale(1.05)}}
+          @keyframes lineFlow{0%{stroke-dashoffset:20}100%{stroke-dashoffset:0}}
+        `}</style>
+
+        {/* Title */}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,color:'#ffd60a',letterSpacing:2}}>⚡ ARC REACTOR GRID</div>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'rgba(88,196,220,0.7)'}}>{devices.length} DEVICES ONLINE</div>
+        </div>
+
+        {/* Main reactor SVG with connected devices */}
+        <svg width="100%" viewBox="0 0 320 320" style={{display:'block',overflow:'visible'}}>
+          {/* Connection lines from reactor to devices */}
+          {devices.slice(0,6).map((_:any,i:number)=>{
+            const angle=(i/Math.min(devices.length,6))*2*Math.PI - Math.PI/2
+            const x2=160+120*Math.cos(angle), y2=160+120*Math.sin(angle)
+            return (
+              <line key={i} x1={160} y1={160} x2={x2} y2={y2}
+                stroke="rgba(88,196,220,0.3)" strokeWidth={1}
+                strokeDasharray="4,4"
+                style={{animation:'lineFlow 1s linear infinite',animationDelay:`${i*0.15}s`}}/>
+            )
+          })}
+
+          {/* Device nodes around reactor */}
+          {devices.slice(0,6).map((d:Device,i:number)=>{
+            const angle=(i/Math.min(devices.length,6))*2*Math.PI - Math.PI/2
+            const x=160+120*Math.cos(angle), y=160+120*Math.sin(angle)
+            const icons:Record<string,string>={'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗','Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️','Load Controller':'🔌'}
+            const icon=icons[d.type]||'📟'
+            const isOnline=d.status==='Online'
+            return (
+              <g key={d.sfdi} style={{animation:'devPulse 2s ease-in-out infinite',animationDelay:`${i*0.3}s`}}>
+                <circle cx={x} cy={y} r={24} fill={isOnline?'rgba(16,185,129,0.15)':'rgba(230,57,70,0.15)'}
+                  stroke={isOnline?'#10b981':'#e63946'} strokeWidth={1.5}/>
+                <text x={x} y={y+1} textAnchor="middle" dominantBaseline="middle" fontSize="16">{icon}</text>
+                <text x={x} y={y+18} textAnchor="middle" fontSize="7" fill={isOnline?'#10b981':'#e63946'}
+                  fontFamily="Share Tech Mono,monospace">{d.sfdi.slice(-6)}</text>
+                {d.power&&d.power>0&&<text x={x} y={y+27} textAnchor="middle" fontSize="6.5"
+                  fill="rgba(255,214,10,0.8)" fontFamily="Share Tech Mono,monospace">{(d.power/1000).toFixed(1)}kW</text>}
+              </g>
+            )
+          })}
+
+          {/* No devices placeholder */}
+          {devices.length===0&&(
+            <text x={160} y={260} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.3)"
+              fontFamily="Share Tech Mono,monospace">No devices registered</text>
+          )}
+
+          {/* Outer orbit ring */}
+          <circle cx={160} cy={160} r={95} fill="none" stroke="rgba(255,214,10,0.08)" strokeWidth={1} strokeDasharray="3,6"/>
+
+          {/* Arc reactor core */}
+          <g>
+            {/* Outer glow */}
+            <circle cx={160} cy={160} r={55} fill="none" stroke="rgba(255,214,10,0.15)" strokeWidth={8}/>
+            {/* Gold ring */}
+            <circle cx={160} cy={160} r={52} fill="rgba(13,17,23,0.9)" stroke="#ffd60a" strokeWidth={2}/>
+            {/* Spinning red ring */}
+            <circle cx={160} cy={160} r={44} fill="none" stroke="#e63946" strokeWidth={2}
+              strokeDasharray="8,5" style={{animation:'arcR2 3s linear infinite',transformOrigin:'160px 160px'}}/>
+            {/* Spinning blue ring */}
+            <circle cx={160} cy={160} r={36} fill="none" stroke="#58c4dc" strokeWidth={1.5}
+              strokeDasharray="5,4" style={{animation:'arcR1 2s linear infinite',transformOrigin:'160px 160px'}}/>
+            {/* Inner gold ring */}
+            <circle cx={160} cy={160} r={28} fill="none" stroke="rgba(255,214,10,0.4)" strokeWidth={1}
+              style={{animation:'arcR2 6s linear infinite',transformOrigin:'160px 160px'}}/>
+            {/* Hex dots on reactor */}
+            {[0,60,120,180,240,300].map((angle:number)=>{
+              const rx=160+42*Math.cos(angle*Math.PI/180)
+              const ry=160+42*Math.sin(angle*Math.PI/180)
+              return <circle key={angle} cx={rx} cy={ry} r={4} fill="#58c4dc"
+                style={{animation:`arcHex 2s ease-in-out infinite`,animationDelay:`${angle/360}s`}}
+                filter="url(#glow)"/>
+            })}
+            {/* Core circle */}
+            <circle cx={160} cy={160} r={22} fill="url(#coreGrad)"
+              style={{animation:'arcCore 2.5s ease-in-out infinite',transformOrigin:'160px 160px'}}/>
+
+            {/* Energy stats in core */}
+            <text x={160} y={152} textAnchor="middle" fontSize="9" fill="#ffd60a"
+              fontFamily="Orbitron,monospace" fontWeight="700">{live.generation.toFixed(0)}</text>
+            <text x={160} y={162} textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.5)"
+              fontFamily="Share Tech Mono,monospace">kW GEN</text>
+            <text x={160} y={174} textAnchor="middle" fontSize="8" fill={live.net>=0?'#10b981':'#e63946'}
+              fontFamily="Orbitron,monospace" fontWeight="700">{live.net>=0?'+':''}{live.net.toFixed(0)}</text>
+            <text x={160} y={183} textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.4)"
+              fontFamily="Share Tech Mono,monospace">NET kW</text>
+
+            <defs>
+              <radialGradient id="coreGrad" cx="40%" cy="40%">
+                <stop offset="0%" stopColor="#7dd5e8"/>
+                <stop offset="50%" stopColor="#0d4f6e"/>
+                <stop offset="100%" stopColor="#061a28"/>
+              </radialGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="2" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+          </g>
+        </svg>
+
+        {/* Live stats below reactor */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:16}}>
+          {[
+            {icon:'⚡',label:'Generation',value:live.generation.toFixed(1)+' kW',color:'#ffd60a'},
+            {icon:'🔌',label:'Consumption',value:live.consumption.toFixed(1)+' kW',color:'#f97316'},
+            {icon:'📊',label:'Net Balance',value:(live.net>=0?'+':'')+live.net.toFixed(1)+' kW',color:live.net>=0?'#10b981':'#e63946'},
+          ].map(s=>(
+            <div key={s.label} style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 6px',
+              textAlign:'center',border:`1px solid ${s.color}20`}}>
+              <div style={{fontSize:16,marginBottom:4}}>{s.icon}</div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:700,color:s.color,lineHeight:1}}>{s.value}</div>
+              <div style={{fontSize:8,color:'rgba(255,255,255,0.4)',marginTop:3,textTransform:'uppercase' as const,letterSpacing:0.8}}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Device status strip */}
+        {devices.length>0&&(
+          <div style={{display:'flex',gap:6,marginTop:12,flexWrap:'wrap' as const}}>
+            {devices.slice(0,8).map((d:Device,i:number)=>(
+              <div key={d.sfdi} style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',
+                background:'rgba(255,255,255,0.04)',borderRadius:20,
+                border:`1px solid ${d.status==='Online'?'rgba(16,185,129,0.4)':'rgba(230,57,70,0.4)'}`}}>
+                <div style={{width:5,height:5,borderRadius:'50%',
+                  background:d.status==='Online'?'#10b981':'#e63946',
+                  boxShadow:`0 0 4px ${d.status==='Online'?'#10b981':'#e63946'}`}}/>
+                <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
+                  color:d.status==='Online'?'#10b981':'rgba(255,255,255,0.4)'}}>{d.sfdi.slice(-6)}</span>
+              </div>
             ))}
           </div>
+        )}
+      </div>
 
-          {/* Arc Reactor Center */}
-          <div style={{display:'flex',justifyContent:'center',width:'100%',margin:'8px 0'}}>
-            <div style={{position:'relative',width:90,height:90}}>
-              <style>{`
-                @keyframes arcR1{to{transform:rotate(360deg)}}
-                @keyframes arcR2{to{transform:rotate(-360deg)}}
-                @keyframes arcCore{0%,100%{box-shadow:0 0 12px rgba(88,196,220,0.8),0 0 24px rgba(88,196,220,0.4),inset 0 0 12px rgba(88,196,220,0.3)}50%{box-shadow:0 0 24px rgba(88,196,220,1),0 0 48px rgba(88,196,220,0.6),0 0 80px rgba(255,214,10,0.2),inset 0 0 20px rgba(88,196,220,0.5)}}
-                @keyframes arcHex{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}
-              `}</style>
-              {/* Outer glow ring */}
-              <div style={{position:'absolute',inset:-4,borderRadius:'50%',border:'1px solid rgba(255,214,10,0.2)',boxShadow:'0 0 20px rgba(255,214,10,0.1)'}}/>
-              {/* Spinning ring 1 */}
-              <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'2px solid transparent',borderTopColor:'#ffd60a',borderRightColor:'#ffd60a',animation:'arcR1 3s linear infinite'}}/>
-              {/* Spinning ring 2 */}
-              <div style={{position:'absolute',inset:8,borderRadius:'50%',border:'2px solid transparent',borderTopColor:'#e63946',borderLeftColor:'#e63946',animation:'arcR2 2s linear infinite'}}/>
-              {/* Spinning ring 3 */}
-              <div style={{position:'absolute',inset:16,borderRadius:'50%',border:'1.5px solid transparent',borderTopColor:'#58c4dc',borderRightColor:'#58c4dc',animation:'arcR1 4s linear infinite'}}/>
-              {/* Hex dots */}
-              {[0,60,120,180,240,300].map((angle:number)=>(
-                <div key={angle} style={{position:'absolute',width:6,height:6,borderRadius:'50%',background:'#58c4dc',
-                  top:`${45-38*Math.cos(angle*Math.PI/180)}%`,
-                  left:`${45+38*Math.sin(angle*Math.PI/180)}%`,
-                  animation:`arcHex 2s ease-in-out infinite`,
-                  animationDelay:`${angle/360}s`,
-                  boxShadow:'0 0 6px rgba(88,196,220,0.8)'}}/>
-              ))}
-              {/* Core */}
-              <div style={{position:'absolute',inset:24,borderRadius:'50%',
-                background:'radial-gradient(circle at 40% 40%,#7dd5e8,#0d4f6e,#061a28)',
-                animation:'arcCore 2.5s ease-in-out infinite',
-                display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <span style={{fontSize:16,filter:'drop-shadow(0 0 4px #58c4dc)'}}>⚡</span>
-              </div>
-              {/* Label */}
-              <div style={{position:'absolute',bottom:-20,left:'50%',transform:'translateX(-50%)',
-                fontFamily:"'Orbitron',monospace",fontSize:8,color:'#ffd60a',
-                letterSpacing:1,whiteSpace:'nowrap' as const}}>ARC REACTOR</div>
+      {/* Sensor gauges below reactor */}
+      <SH T={T} title="Sensor Readings" />
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        {sensors.slice(0,4).map((s:Sensor)=>(
+          <div key={s.label} style={cardStyle({padding:'14px',background:'#0a0c10',border:'1px solid rgba(255,214,10,0.12)'})}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+              <span style={{fontSize:22}}>{s.icon}</span>
+              <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:'rgba(255,255,255,0.4)',
+                background:'rgba(255,255,255,0.06)',padding:'2px 8px',borderRadius:6}}>{s.unit}</span>
+            </div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:26,fontWeight:700,color:s.color,lineHeight:1,marginBottom:4}}>{s.value}</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,0.5)',marginBottom:8}}>{s.label}</div>
+            <div style={{height:3,background:'rgba(255,255,255,0.06)',borderRadius:2}}>
+              <div style={{height:'100%',width:Math.min(s.bar,100)+'%',
+                background:`linear-gradient(90deg,${s.color}60,${s.color})`,
+                borderRadius:2,boxShadow:`0 0 6px ${s.color}40`}}/>
             </div>
           </div>
-
-          {/* Bottom 2 gauges */}
-          <div style={{display:'flex',justifyContent:'space-around',width:'100%',marginTop:16}}>
-            {sensors.slice(2,4).map((s:Sensor)=>(
-              <CircularGauge key={s.label} value={+s.value} max={s.label==='Temperature'?50:s.label==='Solar Irradiance'?1000:s.label==='Battery SOC'?100:10} label={s.label} unit={s.unit} color={s.color} size={85}/>
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
         {sensors.map((s:Sensor,i:number)=>(
