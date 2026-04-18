@@ -406,13 +406,23 @@ export default function VCGApp() {
     }catch(e){console.log('Load devices from API failed:',e)}
   },[])
 
-  // Load from API on startup
+  // Load from API on every app open - no cache dependency
   useEffect(()=>{
-    setTimeout(()=>{
-      loadBlocksFromAPI()
-      loadGroup12FromAPI()
+    // Try immediately first
+    loadDevicesFromAPI()
+    loadGroup12FromAPI()
+    loadBlocksFromAPI()
+    // Then retry after API wakes up (Render free tier spins down)
+    const t1=setTimeout(()=>{
       loadDevicesFromAPI()
-    },2000) // wait 2s for API to wake up
+      loadGroup12FromAPI()
+    },3000)
+    const t2=setTimeout(()=>{
+      loadDevicesFromAPI()
+      loadGroup12FromAPI()
+      loadBlocksFromAPI()
+    },8000)
+    return ()=>{clearTimeout(t1);clearTimeout(t2)}
   },[])
 
   const checkApi=useCallback(async()=>{
