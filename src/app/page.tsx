@@ -646,7 +646,7 @@ export default function VCGApp() {
       {/* CONTENT */}
       <div style={{position:'relative',zIndex:1,padding:'0 12px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%',animation:'pageEnter 0.4s ease',boxSizing:'border-box' as const}} key={screen}>
         {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onAddCommunity2={(b:Block)=>addBlock(b)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} weatherData={weatherData} onDeleteBlock={deleteBlock} />}
-        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>setDevices(p=>p.filter(d=>d.sfdi!==sfdi))} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
+        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} allDevices={devices} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>setDevices(p=>p.filter(d=>d.sfdi!==sfdi))} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
         {screen==='charts'    && <ChartsScreen    T={T} blocks={blocks} history={history} sensors={sensors} cardStyle={cardStyle} darkMode={darkMode} />}
         {screen==='alerts'    && <AlertsScreen    T={T} alerts={alerts} onMarkRead={(id:string)=>setAlerts(p=>p.map(a=>a.id===id?{...a,read:true}:a))} onMarkAll={()=>setAlerts(p=>p.map(a=>({...a,read:true})))} cardStyle={cardStyle} pill={pill} />}
         {screen==='demand'    && <DemandScreen    T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} pill={pill} goldBtn={goldBtn} />}
@@ -1201,7 +1201,7 @@ function ChartsScreen({T,blocks,history,sensors,cardStyle,darkMode}:any) {
 }
 
 // ── BLOCK DETAIL ──────────────────────────────────────────────────────────────
-function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,onRegister,onDeviceClick,onDeviceDelete,onDeleteBlock,darkMode,cardStyle,pill,ironBtn}:any) {
+function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,history,onBack,onRegister,onDeviceClick,onDeviceDelete,onDeleteBlock,darkMode,cardStyle,pill,ironBtn}:any) {
   const live=blocks.find((x:Block)=>x.id===b.id)||b
   const sc=live.status==='Surplus'?T.green:live.status==='Deficit'?T.red:T.arc
   const recentH=(history||[]).slice(-6)
@@ -1237,7 +1237,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,
         {/* Title */}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
           <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,color:'#ffd60a',letterSpacing:2}}>⚡ ARC REACTOR GRID</div>
-          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'rgba(88,196,220,0.7)'}}>{devices.length} DEVICES ONLINE</div>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'rgba(88,196,220,0.7)'}}>{(allDevices||devices).length} DEVICES ONLINE</div>
         </div>
 
         {/* Main reactor SVG with connected devices */}
@@ -1255,7 +1255,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,
           })}
 
           {/* Device nodes around reactor */}
-          {devices.slice(0,6).map((d:Device,i:number)=>{
+          {(allDevices||devices).slice(0,6).map((d:Device,i:number)=>{
             const angle=(i/Math.min(devices.length,6))*2*Math.PI - Math.PI/2
             const x=160+120*Math.cos(angle), y=160+120*Math.sin(angle)
             const icons:Record<string,string>={'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗','Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️','Load Controller':'🔌'}
@@ -1275,7 +1275,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,
           })}
 
           {/* No devices placeholder */}
-          {devices.length===0&&(
+          {(allDevices||devices).length===0&&(
             <text x={160} y={260} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.3)"
               fontFamily="Share Tech Mono,monospace">No devices registered</text>
           )}
@@ -1353,7 +1353,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,
         {/* Device status strip */}
         {devices.length>0&&(
           <div style={{display:'flex',gap:6,marginTop:12,flexWrap:'wrap' as const}}>
-            {devices.slice(0,8).map((d:Device,i:number)=>(
+            {(allDevices||devices).slice(0,8).map((d:Device,i:number)=>(
               <div key={d.sfdi} style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',
                 background:'rgba(255,255,255,0.04)',borderRadius:20,
                 border:`1px solid ${d.status==='Online'?'rgba(16,185,129,0.4)':'rgba(230,57,70,0.4)'}`}}>
