@@ -1231,7 +1231,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
       {recentH.length>0&&<><SH T={T} title="Energy Trend" /><div style={cardStyle({padding:'14px 10px'})}><BarChart data={recentH.map((h:HistoryEntry)=>({label:h.time,values:[+h.generation,+h.consumption]}))} colors={[T.green,T.red]} height={90} T={T}/></div></>}
       <SH T={T} title="Sensor Parameters" />
       {/* Iron Man Arc Reactor — connected to devices and live energy */}
-      <div style={{background:'#0a0c10',borderRadius:24,padding:20,border:'1px solid rgba(255,214,10,0.2)',boxShadow:'0 8px 32px rgba(0,0,0,0.6)'}}>
+      <div style={{background:'#0a0c10',borderRadius:24,padding:20,border:'1px solid rgba(255,214,10,0.2)',boxShadow:'0 8px 32px rgba(0,0,0,0.6)',display:'flex',flexDirection:'column' as const,gap:16}}>
         <style>{`
           @keyframes arcR1{to{transform:rotate(360deg)}}
           @keyframes arcR2{to{transform:rotate(-360deg)}}
@@ -1377,20 +1377,45 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
           ))}
         </div>
 
-        {/* Device status strip */}
-        {devices.length>0&&(
-          <div style={{display:'flex',gap:6,marginTop:12,flexWrap:'wrap' as const}}>
-            {(allDevices||devices).slice(0,8).map((d:Device,i:number)=>(
-              <div key={d.sfdi} style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',
-                background:'rgba(255,255,255,0.04)',borderRadius:20,
-                border:`1px solid ${d.status==='Online'?'rgba(16,185,129,0.4)':'rgba(230,57,70,0.4)'}`}}>
-                <div style={{width:5,height:5,borderRadius:'50%',
-                  background:d.status==='Online'?'#10b981':'#e63946',
-                  boxShadow:`0 0 4px ${d.status==='Online'?'#10b981':'#e63946'}`}}/>
-                <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
-                  color:d.status==='Online'?'#10b981':'rgba(255,255,255,0.4)'}}>{d.sfdi.slice(-6)}</span>
-              </div>
-            ))}
+        {/* Registered devices list */}
+        {(allDevices||devices).length>0&&(
+          <div>
+            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,
+              color:'rgba(255,214,10,0.6)',letterSpacing:1,marginBottom:8}}>
+              REGISTERED DEVICES ({(allDevices||devices).length})
+            </div>
+            <div style={{display:'flex',flexDirection:'column' as const,gap:6,maxHeight:200,overflowY:'auto' as const}}>
+              {(allDevices||devices).map((d:any,i:number)=>{
+                const icons:Record<string,string>={
+                  'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗',
+                  'Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️',
+                  'Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋',
+                  'HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️',
+                  'MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧',
+                  'PressureSensor':'🌀','SmartMeter':'⚡'
+                }
+                const isOnline=d.status==='Online'
+                return (
+                  <div key={d.sfdi||i} style={{display:'flex',alignItems:'center',gap:8,
+                    padding:'6px 10px',borderRadius:10,
+                    background:'rgba(255,255,255,0.04)',
+                    border:`1px solid ${isOnline?'rgba(16,185,129,0.3)':'rgba(230,57,70,0.3)'}`}}>
+                    <span style={{fontSize:14}}>{icons[d.type]||'📟'}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,
+                        color:isOnline?'#10b981':'rgba(255,255,255,0.4)',
+                        overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>
+                        {d.sfdi}
+                      </div>
+                      <div style={{fontSize:9,color:'rgba(255,255,255,0.3)',marginTop:1}}>{d.type}</div>
+                    </div>
+                    <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,
+                      background:isOnline?'#10b981':'#e63946',
+                      boxShadow:`0 0 6px ${isOnline?'#10b981':'#e63946'}`}}/>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -1398,7 +1423,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
       {/* Sensor gauges below reactor */}
       <SH T={T} title="Sensor Readings" />
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-        {sensors.slice(0,4).map((s:Sensor)=>(
+        {sensors.map((s:Sensor)=>(
           <div key={s.label} style={cardStyle({padding:'14px',background:'#0a0c10',border:'1px solid rgba(255,214,10,0.12)'})}>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
               <span style={{fontSize:22}}>{s.icon}</span>
@@ -1415,16 +1440,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
           </div>
         ))}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-        {sensors.map((s:Sensor,i:number)=>(
-          <div key={s.label} style={cardStyle({padding:'14px 16px'})}>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span style={{fontSize:20}}>{s.icon}</span><span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3,background:T.bg,padding:'2px 7px',borderRadius:6}}>{s.unit}</span></div>
-            <div style={{fontFamily:"'Orbitron',monospace",fontSize:24,fontWeight:700,color:s.color,lineHeight:1,marginBottom:4}}>{s.value}</div>
-            <div style={{fontSize:11,color:T.text2,marginBottom:8}}>{s.label}</div>
-            <div style={{height:3,background:T.bg,borderRadius:2,overflow:'hidden'}}><div style={{height:'100%',width:Math.min(s.bar,100)+'%',background:`linear-gradient(90deg,${s.color}60,${s.color})`,borderRadius:2}}/></div>
-          </div>
-        ))}
-      </div>
+
       {evs.length>0&&<><SH T={T} title="EV Charging" />{evs.map((ev:EV)=>(
         <div key={ev.id} style={cardStyle({border:`1.5px solid ${ev.status==='CHARGING'?T.gold:T.border}`})}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><div style={{display:'flex',gap:10,alignItems:'center'}}><span style={{fontSize:24}}>🚗</span><div style={{fontWeight:800,fontSize:15,color:T.text}}>{ev.id}</div></div><div style={pill(ev.status==='CHARGING'?T.gold:T.text3)}>{ev.status}</div></div>
