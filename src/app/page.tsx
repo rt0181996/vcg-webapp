@@ -381,11 +381,37 @@ export default function VCGApp() {
     }catch(e){console.log('Load Group12 from API failed:',e)}
   },[])
 
+  // Sync devices to API when they change
+  useEffect(()=>{
+    try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
+    // Sync to API
+    if(devices.length>0){
+      fetch(BLOCKS_API+'/devices/sync',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({devices})
+      }).catch(()=>{})
+    }
+  },[devices])
+
+  const loadDevicesFromAPI=useCallback(async()=>{
+    try{
+      const r=await fetch(BLOCKS_API+'/devices/sync')
+      if(r.ok){
+        const d=await r.json()
+        if(d.devices&&d.devices.length>0){
+          setDevices(d.devices)
+        }
+      }
+    }catch(e){console.log('Load devices from API failed:',e)}
+  },[])
+
   // Load from API on startup
   useEffect(()=>{
     setTimeout(()=>{
       loadBlocksFromAPI()
       loadGroup12FromAPI()
+      loadDevicesFromAPI()
     },2000) // wait 2s for API to wake up
   },[])
 
@@ -610,7 +636,7 @@ export default function VCGApp() {
       {/* CONTENT */}
       <div style={{position:'relative',zIndex:1,padding:'0 12px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%',animation:'pageEnter 0.4s ease',boxSizing:'border-box' as const}} key={screen}>
         {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onAddCommunity2={(b:Block)=>addBlock(b)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} weatherData={weatherData} onDeleteBlock={deleteBlock} />}
-        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
+        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>setDevices(p=>p.filter(d=>d.sfdi!==sfdi))} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
         {screen==='charts'    && <ChartsScreen    T={T} blocks={blocks} history={history} sensors={sensors} cardStyle={cardStyle} darkMode={darkMode} />}
         {screen==='alerts'    && <AlertsScreen    T={T} alerts={alerts} onMarkRead={(id:string)=>setAlerts(p=>p.map(a=>a.id===id?{...a,read:true}:a))} onMarkAll={()=>setAlerts(p=>p.map(a=>({...a,read:true})))} cardStyle={cardStyle} pill={pill} />}
         {screen==='demand'    && <DemandScreen    T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} pill={pill} goldBtn={goldBtn} />}
@@ -1165,7 +1191,7 @@ function ChartsScreen({T,blocks,history,sensors,cardStyle,darkMode}:any) {
 }
 
 // ── BLOCK DETAIL ──────────────────────────────────────────────────────────────
-function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,onRegister,onDeviceClick,onDeleteBlock,darkMode,cardStyle,pill,ironBtn}:any) {
+function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,onRegister,onDeviceClick,onDeviceDelete,onDeleteBlock,darkMode,cardStyle,pill,ironBtn}:any) {
   const live=blocks.find((x:Block)=>x.id===b.id)||b
   const sc=live.status==='Surplus'?T.green:live.status==='Deficit'?T.red:T.arc
   const recentH=(history||[]).slice(-6)
@@ -1373,11 +1399,23 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,history,onBack,
       <div style={cardStyle({padding:16})}>
         {devices.length===0?<div style={{textAlign:'center',padding:'16px 0'}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:13,color:T.text2}}>No devices</div></div>:(
           <div style={{display:'flex',flexDirection:'column',gap:8}}>{devices.map((d:Device,i:number)=>(
-            <div key={i} onClick={()=>onDeviceClick(d)} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',background:T.bg,borderRadius:12,border:`1px solid ${T.border}`,cursor:'pointer',transition:'all 0.15s'}}
-              onMouseOver={e=>{e.currentTarget.style.borderColor=T.arc+'50'}} onMouseOut={e=>{e.currentTarget.style.borderColor=T.border}}>
-              <div style={{width:36,height:36,borderRadius:10,background:T.arcLight,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>📟</div>
-              <div style={{flex:1}}><div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:12,color:T.arc}}>{d.sfdi}</div><div style={{fontSize:11,color:T.text3}}>{d.type}</div></div>
-              <div style={pill(d.status==='Online'?T.green:T.amber)}>{d.status}</div>
+            <div key={i} style={{display:'flex',alignItems:'center',background:T.bg,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden',transition:'all 0.15s'}}>
+              <div onClick={()=>onDeviceClick(d)} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',flex:1,cursor:'pointer'}}
+                onMouseOver={e=>{e.currentTarget.parentElement!.style.borderColor=T.arc+'50'}}
+                onMouseOut={e=>{e.currentTarget.parentElement!.style.borderColor=T.border}}>
+                <div style={{width:36,height:36,borderRadius:10,background:T.arcLight,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>📟</div>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:12,color:T.arc}}>{d.sfdi}</div>
+                  <div style={{fontSize:11,color:T.text3}}>{d.type}</div>
+                </div>
+                <div style={pill(d.status==='Online'?T.green:T.amber)}>{d.status}</div>
+              </div>
+              <button onClick={()=>{if(window.confirm('Delete '+d.sfdi+'?')) onDeviceDelete(d.sfdi)}}
+                style={{background:'rgba(230,57,70,0.1)',border:'none',borderLeft:`1px solid ${T.border}`,
+                  padding:'0 12px',alignSelf:'stretch',cursor:'pointer',color:T.red,
+                  fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                🗑️
+              </button>
             </div>
           ))}</div>
         )}
@@ -1933,7 +1971,7 @@ function DevicesScreen({T,devices,blocks,activeDevice,onDelete,cardStyle,pill,ir
         {[{l:'LFDI',v:sel.lfdi||'—'},{l:'Type',v:sel.type},{l:'Block',v:blocks.find((b:Block)=>b.id===sel.block)?.name||sel.block},{l:'Power',v:sel.power?sel.power+'W':'—'},{l:'Voltage',v:sel.voltage?sel.voltage+'V':'—'},{l:'Last Seen',v:sel.lastSeen||'—'}].map(r=>(
           <div key={r.l} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:`1px solid ${T.border}`}}><span style={{fontSize:12,color:T.text2,fontWeight:600}}>{r.l}</span><span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:T.text,fontWeight:700,maxWidth:'55%',textAlign:'right'}}>{r.v}</span></div>
         ))}
-        <button onClick={()=>{onDelete(sel.sfdi);setSel(null)}} style={{...ironBtn(),marginTop:16,background:T.redLight,color:T.red,boxShadow:'none',border:`1px solid ${T.red}30`}}>🗑️ Deregister</button>
+        <button onClick={()=>{if(window.confirm('Delete device '+sel.sfdi+'?')){onDelete(sel.sfdi);setSel(null)}}} style={{...ironBtn(),marginTop:16,background:T.redLight,color:T.red,boxShadow:'none',border:`1px solid ${T.red}30`}}>🗑️ Delete Device</button>
       </div>
     </div>
   )
@@ -1943,12 +1981,24 @@ function DevicesScreen({T,devices,blocks,activeDevice,onDelete,cardStyle,pill,ir
       {blocks.map((b:Block)=>{const bd=devices.filter((d:Device)=>d.block===b.id);if(!bd.length) return null;return(
         <div key={b.id}><div style={{fontWeight:700,fontSize:12,color:T.text2,padding:'4px 4px 8px',display:'flex',alignItems:'center',gap:6}}><span>{b.emoji}</span>{b.name} — {b.location}</div>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>{bd.map((d:Device,i:number)=>(
-            <div key={i} onClick={()=>setSel(d)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',background:T.card,borderRadius:16,border:`1px solid ${T.border}`,cursor:'pointer',transition:'all 0.15s'}}
-              onMouseOver={e=>{e.currentTarget.style.borderColor=T.arc+'50'}} onMouseOut={e=>{e.currentTarget.style.borderColor=T.border}}>
-              <div style={{width:38,height:38,borderRadius:12,background:b.color+'15',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>📟</div>
-              <div style={{flex:1}}><div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:12,color:T.arc}}>{d.sfdi}</div><div style={{fontSize:11,color:T.text3}}>{d.type}{d.power?` · ${d.power}W`:''}</div></div>
-              <div style={pill(d.status==='Online'?T.green:T.amber)}>{d.status}</div>
-              <span style={{color:T.text3}}>›</span>
+            <div key={i} style={{display:'flex',alignItems:'center',background:T.card,borderRadius:16,border:`1px solid ${T.border}`,overflow:'hidden',transition:'all 0.15s'}}>
+              <div onClick={()=>setSel(d)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',flex:1,cursor:'pointer'}}
+                onMouseOver={e=>{e.currentTarget.parentElement!.style.borderColor=T.arc+'50'}}
+                onMouseOut={e=>{e.currentTarget.parentElement!.style.borderColor=T.border}}>
+                <div style={{width:38,height:38,borderRadius:12,background:b.color+'15',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>📟</div>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:12,color:T.arc}}>{d.sfdi}</div>
+                  <div style={{fontSize:11,color:T.text3}}>{d.type}{d.power?` · ${d.power}W`:''}</div>
+                </div>
+                <div style={pill(d.status==='Online'?T.green:T.amber)}>{d.status}</div>
+                <span style={{color:T.text3,marginLeft:4}}>›</span>
+              </div>
+              <button onClick={()=>{if(window.confirm('Delete '+d.sfdi+'?')) onDelete(d.sfdi)}}
+                style={{background:'rgba(230,57,70,0.1)',border:'none',borderLeft:`1px solid ${T.border}`,
+                  padding:'0 16px',alignSelf:'stretch',cursor:'pointer',color:T.red,
+                  fontSize:18,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                🗑️
+              </button>
             </div>
           ))}</div>
         </div>
