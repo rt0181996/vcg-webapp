@@ -1242,218 +1242,285 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
       </div>
       {recentH.length>0&&<><SH T={T} title="Energy Trend" /><div style={cardStyle({padding:'14px 10px'})}><BarChart data={recentH.map((h:HistoryEntry)=>({label:h.time,values:[+h.generation,+h.consumption]}))} colors={[T.green,T.red]} height={90} T={T}/></div></>}
       <SH T={T} title="Sensor Parameters" />
-      {/* Iron Man Arc Reactor — connected to devices and live energy */}
-      <div style={{background:'#0a0c10',borderRadius:24,padding:20,border:'1px solid rgba(255,214,10,0.2)',boxShadow:'0 8px 32px rgba(0,0,0,0.6)',display:'flex',flexDirection:'column' as const,gap:16}}>
+      {/* Iron Man Arc Reactor — Block devices with data labels */}
+      <div style={{background:'#0a0c10',borderRadius:24,padding:20,
+        border:'1px solid rgba(255,214,10,0.2)',
+        boxShadow:'0 8px 32px rgba(0,0,0,0.6)'}}>
         <style>{`
           @keyframes arcR1{to{transform:rotate(360deg)}}
           @keyframes arcR2{to{transform:rotate(-360deg)}}
-          @keyframes arcCore{0%,100%{box-shadow:0 0 16px rgba(88,196,220,0.9),0 0 32px rgba(88,196,220,0.4),inset 0 0 16px rgba(88,196,220,0.3)}50%{box-shadow:0 0 32px rgba(88,196,220,1),0 0 64px rgba(88,196,220,0.5),0 0 100px rgba(255,214,10,0.15),inset 0 0 24px rgba(88,196,220,0.6)}}
-          @keyframes arcHex{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
-          @keyframes devPulse{0%,100%{opacity:0.4;transform:scale(0.95)}50%{opacity:1;transform:scale(1.05)}}
-          @keyframes lineFlow{0%{stroke-dashoffset:20}100%{stroke-dashoffset:0}}
+          @keyframes arcCore{
+            0%,100%{box-shadow:0 0 16px rgba(88,196,220,0.9),0 0 32px rgba(88,196,220,0.4)}
+            50%{box-shadow:0 0 32px rgba(88,196,220,1),0 0 64px rgba(88,196,220,0.5)}
+          }
         `}</style>
 
-        {/* Title */}
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-          <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,color:'#ffd60a',letterSpacing:2}}>⚡ ARC REACTOR GRID</div>
-          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'rgba(88,196,220,0.7)'}}>{(allDevices||devices).length} DEVICES ONLINE</div>
+        {/* Header */}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,color:'#ffd60a',letterSpacing:2}}>
+            ⚡ ARC REACTOR GRID
+          </div>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'rgba(88,196,220,0.7)'}}>
+            {devices.length} DEVICES
+          </div>
         </div>
 
-        {/* Main reactor SVG with connected devices */}
-        <svg width="100%" viewBox="0 0 320 320" style={{display:'block',overflow:'visible'}}>
+        {/* Responsive layout: SVG + device list */}
+        <div style={{display:'flex',flexDirection:'column' as const,gap:16}}>
 
+          {/* SVG Reactor */}
+          <div style={{width:'100%',maxWidth:320,margin:'0 auto'}}>
+            <svg width="100%" viewBox="0 0 320 320"
+              style={{display:'block',overflow:'visible'}}>
+              <defs>
+                <radialGradient id="coreGrad2" cx="40%" cy="40%">
+                  <stop offset="0%" stopColor="#7dd5e8"/>
+                  <stop offset="50%" stopColor="#0d4f6e"/>
+                  <stop offset="100%" stopColor="#061a28"/>
+                </radialGradient>
+              </defs>
 
-          {/* Device nodes around reactor */}
-          {(allDevices||devices).slice(0,6).map((d:any,i:number)=>{
-            const total=Math.min((allDevices||devices).length,6)
-            const baseAngle=(i/total)*2*Math.PI - Math.PI/2
-            const r=95
-            const x=160+r*Math.cos(baseAngle), y=160+r*Math.sin(baseAngle)
-            // Get sensor value for this device type
-            const sensorVal=(()=>{
-              const typeToSensor:Record<string,string>={
-                'SmartMeter':'Energy Meter','Smart Meter':'Energy Meter',
-                'Solar Inverter':'Solar Irradiance','TemperatureSensor':'Temperature',
-                'BatterySensor':'Battery SOC','Battery Storage':'Battery SOC',
-                'HumiditySensor':'Humidity','CO2Sensor':'CO₂ Level',
-                'LightSensor':'Solar Irradiance','Wind Turbine':'Wind Speed',
-                'EV Charger':'Grid Import','MotionSensor':'Motion',
-              }
-              const sLabel=typeToSensor[d.type]
-              if(sLabel){
-                const s=sensors.find((x:any)=>x.label===sLabel||x.label.includes(sLabel.split(' ')[0]))
-                if(s) return `${s.value}${s.unit}`
-              }
-              return null
-            })()
-            const icons:Record<string,string>={
-              'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗',
-              'Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️',
-              'Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋',
-              'HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️',
-              'MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧',
-              'PressureSensor':'🌀','SmartMeter':'⚡'
-            }
-            const typeLabels:Record<string,string>={
-              'TemperatureSensor':'Temp','HumiditySensor':'Humidity',
-              'BatterySensor':'Battery','CO2Sensor':'CO2','LightSensor':'Light',
-              'MotionSensor':'Motion','DoorSensor':'Door','FlowSensor':'Flow',
-              'PressureSensor':'Pressure','SmartMeter':'SmartMeter',
-              'Solar Inverter':'Solar','EV Charger':'EV Charger',
-              'Wind Turbine':'Wind','Battery Storage':'Battery',
-              'Smart Meter':'SmartMeter','Load Controller':'Load','HVAC Unit':'HVAC'
-            }
-            const icon=icons[d.type]||'📟'
-            const label=typeLabels[d.type]||d.type||''
-            const isOnline=d.status==='Online'
-            return (
-              <g key={d.sfdi||i}>
-                {/* Connection line */}
-                <line x1={160} y1={160} x2={x} y2={y}
-                  stroke={isOnline?'rgba(16,185,129,0.4)':'rgba(230,57,70,0.3)'}
-                  strokeWidth={1} strokeDasharray="3,4"/>
-                {/* Pulsing outer ring */}
-                <circle cx={x} cy={y} r={22}
-                  fill="none"
-                  stroke={isOnline?'rgba(16,185,129,0.2)':'rgba(230,57,70,0.15)'}
-                  strokeWidth={1}/>
-                {/* Device circle */}
-                <circle cx={x} cy={y} r={18}
-                  fill={isOnline?'rgba(16,185,129,0.15)':'rgba(230,57,70,0.15)'}
-                  stroke={isOnline?'#10b981':'#e63946'} strokeWidth={1.5}/>
-                {/* Icon - always upright */}
-                <text x={x} y={y+5} textAnchor="middle" fontSize="12">{icon}</text>
-                {/* Type label */}
-                <text x={x} y={y+32} textAnchor="middle" fontSize="7"
-                  fill={isOnline?'#10b981':'rgba(255,255,255,0.4)'}
-                  fontFamily="Share Tech Mono,monospace">{label.slice(0,10)}</text>
-                {/* Sensor value or power label */}
-                <text x={x} y={y+43} textAnchor="middle" fontSize="7"
-                  fill="rgba(255,214,10,0.9)"
-                  fontFamily="Share Tech Mono,monospace">
-                  {sensorVal||(d.power&&d.power>0?(d.power>=1000?(d.power/1000).toFixed(1)+'kW':d.power+'W'):(d.voltage?d.voltage+'V':''))}
-                </text>
-              </g>
-            )
-          })}
-          {/* Orbit ring rotates anti-clockwise */}
-          <circle cx={160} cy={160} r={95} fill="none"
-            stroke="rgba(88,196,220,0.15)" strokeWidth={1}
-            strokeDasharray="4,8"
-            style={{animation:'arcR2 15s linear infinite',transformOrigin:'160px 160px'}}/>
+              {/* Orbit ring - anti-clockwise */}
+              <circle cx={160} cy={160} r={108} fill="none"
+                stroke="rgba(255,214,10,0.12)" strokeWidth={1}
+                strokeDasharray="4,8"
+                style={{animation:'arcR2 18s linear infinite',
+                  transformOrigin:'160px 160px'}}/>
 
-          {/* No devices placeholder */}
-          {(allDevices||devices).length===0&&(
-            <text x={160} y={260} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.3)"
-              fontFamily="Share Tech Mono,monospace">No devices registered</text>
-          )}
+              {/* Device nodes - current block devices only */}
+              {devices.slice(0,8).map((d:any,i:number)=>{
+                const total=Math.min(devices.length,8)
+                const angle=(i/total)*2*Math.PI - Math.PI/2
+                const r=108
+                const x=160+r*Math.cos(angle)
+                const y=160+r*Math.sin(angle)
+                const isOnline=d.status==='Online'||d.status==='online'
 
-          {/* Outer orbit ring */}
-          <circle cx={160} cy={160} r={95} fill="none" stroke="rgba(255,214,10,0.08)" strokeWidth={1} strokeDasharray="3,6"/>
-
-          {/* Arc reactor core */}
-          <g>
-            {/* Outer glow */}
-            <circle cx={160} cy={160} r={55} fill="none" stroke="rgba(255,214,10,0.15)" strokeWidth={8}/>
-            {/* Gold ring */}
-            <circle cx={160} cy={160} r={52} fill="rgba(13,17,23,0.9)" stroke="#ffd60a" strokeWidth={2}/>
-            {/* Spinning red ring */}
-            <circle cx={160} cy={160} r={44} fill="none" stroke="#e63946" strokeWidth={2}
-              strokeDasharray="8,5" style={{animation:'arcR2 3s linear infinite',transformOrigin:'160px 160px'}}/>
-            {/* Spinning blue ring */}
-            <circle cx={160} cy={160} r={36} fill="none" stroke="#58c4dc" strokeWidth={1.5}
-              strokeDasharray="5,4" style={{animation:'arcR1 2s linear infinite',transformOrigin:'160px 160px'}}/>
-            {/* Inner gold ring */}
-            <circle cx={160} cy={160} r={28} fill="none" stroke="rgba(255,214,10,0.4)" strokeWidth={1}
-              style={{animation:'arcR2 6s linear infinite',transformOrigin:'160px 160px'}}/>
-
-            {/* Core circle */}
-            <circle cx={160} cy={160} r={22} fill="url(#coreGrad)"
-              style={{animation:'arcCore 2.5s ease-in-out infinite',transformOrigin:'160px 160px'}}/>
-
-            {/* Energy stats in core */}
-            <text x={160} y={152} textAnchor="middle" fontSize="9" fill="#ffd60a"
-              fontFamily="Orbitron,monospace" fontWeight="700">{live.generation.toFixed(0)}</text>
-            <text x={160} y={162} textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.5)"
-              fontFamily="Share Tech Mono,monospace">kW GEN</text>
-            <text x={160} y={174} textAnchor="middle" fontSize="8" fill={live.net>=0?'#10b981':'#e63946'}
-              fontFamily="Orbitron,monospace" fontWeight="700">{live.net>=0?'+':''}{live.net.toFixed(0)}</text>
-            <text x={160} y={183} textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.4)"
-              fontFamily="Share Tech Mono,monospace">NET kW</text>
-
-            <defs>
-              <radialGradient id="coreGrad" cx="40%" cy="40%">
-                <stop offset="0%" stopColor="#7dd5e8"/>
-                <stop offset="50%" stopColor="#0d4f6e"/>
-                <stop offset="100%" stopColor="#061a28"/>
-              </radialGradient>
-              <filter id="glow">
-                <feGaussianBlur stdDeviation="2" result="blur"/>
-                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-              </filter>
-            </defs>
-          </g>
-        </svg>
-
-        {/* Live stats below reactor */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:16}}>
-          {[
-            {icon:'⚡',label:'Generation',value:live.generation.toFixed(1)+' kW',color:'#ffd60a'},
-            {icon:'🔌',label:'Consumption',value:live.consumption.toFixed(1)+' kW',color:'#f97316'},
-            {icon:'📊',label:'Net Balance',value:(live.net>=0?'+':'')+live.net.toFixed(1)+' kW',color:live.net>=0?'#10b981':'#e63946'},
-          ].map(s=>(
-            <div key={s.label} style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 6px',
-              textAlign:'center',border:`1px solid ${s.color}20`}}>
-              <div style={{fontSize:16,marginBottom:4}}>{s.icon}</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:700,color:s.color,lineHeight:1}}>{s.value}</div>
-              <div style={{fontSize:8,color:'rgba(255,255,255,0.4)',marginTop:3,textTransform:'uppercase' as const,letterSpacing:0.8}}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Registered devices list */}
-        {(allDevices||devices).length>0&&(
-          <div>
-            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,
-              color:'rgba(255,214,10,0.6)',letterSpacing:1,marginBottom:8}}>
-              REGISTERED DEVICES ({(allDevices||devices).length})
-            </div>
-            <div style={{display:'flex',flexDirection:'column' as const,gap:6,maxHeight:200,overflowY:'auto' as const}}>
-              {(allDevices||devices).map((d:any,i:number)=>{
                 const icons:Record<string,string>={
                   'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗',
                   'Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️',
-                  'Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋',
-                  'HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️',
-                  'MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧',
-                  'PressureSensor':'🌀','SmartMeter':'⚡'
+                  'Load Controller':'🔌','TemperatureSensor':'🌡️',
+                  'BatterySensor':'🔋','HumiditySensor':'💧','CO2Sensor':'🌿',
+                  'LightSensor':'☀️','MotionSensor':'🏃','DoorSensor':'🚪',
+                  'FlowSensor':'💧','PressureSensor':'🌀','SmartMeter':'⚡',
                 }
-                const isOnline=d.status==='Online'
+                const typeLabels:Record<string,string>={
+                  'TemperatureSensor':'Temp','HumiditySensor':'Humidity',
+                  'BatterySensor':'Battery','CO2Sensor':'CO2',
+                  'LightSensor':'Light','MotionSensor':'Motion',
+                  'DoorSensor':'Door','FlowSensor':'Flow',
+                  'PressureSensor':'Pressure','SmartMeter':'SmtMeter',
+                  'Solar Inverter':'Solar','EV Charger':'EV',
+                  'Wind Turbine':'Wind','Battery Storage':'Battery',
+                  'Smart Meter':'SmtMeter','Load Controller':'Load',
+                  'HVAC Unit':'HVAC',
+                }
+
+                const icon=icons[d.type]||'📟'
+                const label=typeLabels[d.type]||d.type?.slice(0,8)||''
+
+                // Get real value from sensors for this device type
+                const sensorMap:Record<string,string>={
+                  'TemperatureSensor':'Temperature','SmartMeter':'Energy Meter',
+                  'Smart Meter':'Energy Meter','BatterySensor':'Battery SOC',
+                  'Battery Storage':'Battery SOC','LightSensor':'Solar Irradiance',
+                  'Solar Inverter':'Solar Irradiance','HumiditySensor':'Humidity',
+                  'CO2Sensor':'CO₂ Level','Wind Turbine':'Wind Speed',
+                  'FlowSensor':'Water Flow','PressureSensor':'Air Pressure',
+                }
+                const sKey=sensorMap[d.type]
+                const sensor=sKey?sensors.find((s:any)=>s.label===sKey||s.label.includes(sKey.split(' ')[0])):null
+                const dataVal=sensor?`${sensor.value}${sensor.unit}`:(d.power&&d.power>0?(d.power>=1000?(d.power/1000).toFixed(1)+'kW':d.power+'W'):'')
+
+                const nodeColor=isOnline?'#10b981':'#e63946'
+
                 return (
-                  <div key={d.sfdi||i} style={{display:'flex',alignItems:'center',gap:8,
-                    padding:'6px 10px',borderRadius:10,
-                    background:'rgba(255,255,255,0.04)',
-                    border:`1px solid ${isOnline?'rgba(16,185,129,0.3)':'rgba(230,57,70,0.3)'}`}}>
-                    <span style={{fontSize:14}}>{icons[d.type]||'📟'}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,
-                        color:isOnline?'#10b981':'rgba(255,255,255,0.4)',
-                        overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>
-                        {d.sfdi}
-                      </div>
-                      <div style={{fontSize:9,color:'rgba(255,255,255,0.3)',marginTop:1}}>{d.type}</div>
-                    </div>
-                    <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,
-                      background:isOnline?'#10b981':'#e63946',
-                      boxShadow:`0 0 6px ${isOnline?'#10b981':'#e63946'}`}}/>
-                  </div>
+                  <g key={d.sfdi||i}>
+                    {/* Connection line */}
+                    <line x1={160} y1={160} x2={x} y2={y}
+                      stroke={isOnline?'rgba(16,185,129,0.35)':'rgba(230,57,70,0.25)'}
+                      strokeWidth={1} strokeDasharray="3,5"/>
+
+                    {/* Outer pulse ring */}
+                    <circle cx={x} cy={y} r={24}
+                      fill="none"
+                      stroke={nodeColor}
+                      strokeWidth={0.8}
+                      opacity={0.3}/>
+
+                    {/* Device circle */}
+                    <circle cx={x} cy={y} r={19}
+                      fill={isOnline?'rgba(16,185,129,0.12)':'rgba(230,57,70,0.12)'}
+                      stroke={nodeColor}
+                      strokeWidth={1.5}/>
+
+                    {/* Device icon */}
+                    <text x={x} y={y+5} textAnchor="middle"
+                      fontSize="13" dominantBaseline="middle">
+                      {icon}
+                    </text>
+
+                    {/* Type label */}
+                    <text x={x} y={y+30} textAnchor="middle"
+                      fontSize="7" fill={nodeColor}
+                      fontFamily="Share Tech Mono,monospace">
+                      {label}
+                    </text>
+
+                    {/* Data value in gold */}
+                    {dataVal&&(
+                      <text x={x} y={y+41} textAnchor="middle"
+                        fontSize="7" fill="#ffd60a"
+                        fontFamily="Share Tech Mono,monospace"
+                        fontWeight="700">
+                        {dataVal}
+                      </text>
+                    )}
+                  </g>
                 )
               })}
-            </div>
-          </div>
-        )}
-      </div>
 
+              {/* Reactor core rings */}
+              <circle cx={160} cy={160} r={58}
+                fill="none" stroke="rgba(255,214,10,0.2)" strokeWidth={6}/>
+              <circle cx={160} cy={160} r={55}
+                fill="#0a0c10" stroke="#ffd60a" strokeWidth={2}/>
+              <circle cx={160} cy={160} r={47}
+                fill="none" stroke="#e63946" strokeWidth={1.5}
+                strokeDasharray="7,4"
+                style={{animation:'arcR2 3s linear infinite',
+                  transformOrigin:'160px 160px'}}/>
+              <circle cx={160} cy={160} r={39}
+                fill="none" stroke="#58c4dc" strokeWidth={1.2}
+                strokeDasharray="5,3"
+                style={{animation:'arcR1 2s linear infinite',
+                  transformOrigin:'160px 160px'}}/>
+              <circle cx={160} cy={160} r={30}
+                fill="url(#coreGrad2)"
+                style={{animation:'arcCore 2.5s ease-in-out infinite',
+                  transformOrigin:'160px 160px'}}/>
+
+              {/* Core data */}
+              <text x={160} y={152} textAnchor="middle"
+                fontSize="11" fill="#ffd60a"
+                fontFamily="Orbitron,monospace" fontWeight="700">
+                {live.generation.toFixed(0)}
+              </text>
+              <text x={160} y={163} textAnchor="middle"
+                fontSize="6.5" fill="rgba(255,255,255,0.4)"
+                fontFamily="Share Tech Mono,monospace">kW GEN</text>
+              <text x={160} y={176} textAnchor="middle"
+                fontSize="10" fill={live.net>=0?'#10b981':'#e63946'}
+                fontFamily="Orbitron,monospace" fontWeight="700">
+                {live.net>=0?'+':''}{live.net.toFixed(0)}
+              </text>
+              <text x={160} y={186} textAnchor="middle"
+                fontSize="6" fill="rgba(255,255,255,0.3)"
+                fontFamily="Share Tech Mono,monospace">NET kW</text>
+            </svg>
+          </div>
+
+          {/* Live energy stats */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+            {[
+              {icon:'⚡',label:'Generation',value:live.generation.toFixed(1)+' kW',color:'#ffd60a'},
+              {icon:'🔌',label:'Consumption',value:live.consumption.toFixed(1)+' kW',color:'#f97316'},
+              {icon:'📊',label:'Net Balance',value:(live.net>=0?'+':'')+live.net.toFixed(1)+' kW',
+                color:live.net>=0?'#10b981':'#e63946'},
+            ].map(s=>(
+              <div key={s.label} style={{background:'rgba(255,255,255,0.04)',
+                borderRadius:12,padding:'10px 6px',textAlign:'center' as const,
+                border:`1px solid ${s.color}15`}}>
+                <div style={{fontSize:16,marginBottom:4}}>{s.icon}</div>
+                <div style={{fontFamily:"'Orbitron',monospace",fontSize:12,
+                  fontWeight:700,color:s.color,lineHeight:1}}>{s.value}</div>
+                <div style={{fontSize:8,color:'rgba(255,255,255,0.35)',
+                  marginTop:3,textTransform:'uppercase' as const,letterSpacing:0.8}}>
+                  {s.label}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Registered devices list */}
+          {devices.length>0&&(
+            <div>
+              <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:9,
+                color:'rgba(255,214,10,0.5)',letterSpacing:1.5,
+                marginBottom:8,textTransform:'uppercase' as const}}>
+                Registered Devices — {devices.length} total
+              </div>
+              <div style={{display:'grid',
+                gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',
+                gap:6}}>
+                {devices.map((d:any,i:number)=>{
+                  const isOnline=d.status==='Online'||d.status==='online'
+                  const icons:Record<string,string>={
+                    'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗',
+                    'Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️',
+                    'Load Controller':'🔌','TemperatureSensor':'🌡️',
+                    'BatterySensor':'🔋','HumiditySensor':'💧','CO2Sensor':'🌿',
+                    'LightSensor':'☀️','MotionSensor':'🏃','DoorSensor':'🚪',
+                    'FlowSensor':'💧','PressureSensor':'🌀','SmartMeter':'⚡',
+                  }
+                  const sensorMap:Record<string,string>={
+                    'TemperatureSensor':'Temperature','SmartMeter':'Energy Meter',
+                    'Smart Meter':'Energy Meter','BatterySensor':'Battery SOC',
+                    'LightSensor':'Solar Irradiance','HumiditySensor':'Humidity',
+                    'CO2Sensor':'CO₂ Level','Wind Turbine':'Wind Speed',
+                    'FlowSensor':'Water Flow','PressureSensor':'Air Pressure',
+                    'Solar Inverter':'Solar Irradiance',
+                  }
+                  const sKey=sensorMap[d.type]
+                  const sensor=sKey?sensors.find((s:any)=>s.label===sKey||s.label.includes(sKey.split(' ')[0])):null
+                  const dataVal=sensor?`${sensor.value} ${sensor.unit}`:(d.power&&d.power>0?(d.power>=1000?(d.power/1000).toFixed(1)+' kW':d.power+' W'):'—')
+                  return (
+                    <div key={d.sfdi||i} style={{
+                      display:'flex',alignItems:'center',gap:8,
+                      padding:'8px 10px',borderRadius:10,
+                      background:'rgba(255,255,255,0.04)',
+                      border:`1px solid ${isOnline?'rgba(16,185,129,0.25)':'rgba(230,57,70,0.25)'}`}}>
+                      <span style={{fontSize:16,flexShrink:0}}>{icons[d.type]||'📟'}</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontFamily:"'Share Tech Mono',monospace",
+                          fontSize:9,color:isOnline?'#10b981':'rgba(255,255,255,0.3)',
+                          overflow:'hidden',textOverflow:'ellipsis',
+                          whiteSpace:'nowrap' as const}}>
+                          {d.sfdi}
+                        </div>
+                        <div style={{fontSize:8,color:'rgba(255,255,255,0.3)',marginTop:1}}>
+                          {d.type}
+                        </div>
+                      </div>
+                      <div style={{textAlign:'right' as const,flexShrink:0}}>
+                        <div style={{fontFamily:"'Share Tech Mono',monospace",
+                          fontSize:9,color:'#ffd60a',fontWeight:700}}>
+                          {dataVal}
+                        </div>
+                        <div style={{width:6,height:6,borderRadius:'50%',
+                          background:isOnline?'#10b981':'#e63946',
+                          marginLeft:'auto',marginTop:2,
+                          boxShadow:`0 0 4px ${isOnline?'#10b981':'#e63946'}`}}/>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {devices.length===0&&(
+            <div style={{textAlign:'center' as const,padding:'20px 0',
+              color:'rgba(255,255,255,0.3)',
+              fontFamily:"'Share Tech Mono',monospace",fontSize:11}}>
+              No devices registered in this block.<br/>
+              <span style={{fontSize:10,color:'rgba(255,214,10,0.4)'}}>
+                Register devices to see them here.
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
       {/* Sensor gauges below reactor */}
       <SH T={T} title="Sensor Readings" />
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
