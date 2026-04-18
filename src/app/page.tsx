@@ -1252,6 +1252,8 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
 
 
           {/* Device nodes around reactor */}
+          {/* Rotating container - anti-clockwise */}
+          <g style={{animation:'arcR2 20s linear infinite',transformOrigin:'160px 160px'}}>
           {(allDevices||devices).slice(0,6).map((d:any,i:number)=>{
             const total=Math.min((allDevices||devices).length,6)
             const angle=(i/total)*2*Math.PI - Math.PI/2
@@ -1299,6 +1301,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
               </g>
             )
           })}
+          </g>
 
           {/* No devices placeholder */}
           {(allDevices||devices).length===0&&(
