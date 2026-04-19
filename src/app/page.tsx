@@ -22,12 +22,13 @@ const saveToJSONBin=async(data:any)=>{
 // Load all VCG data from JSONBin
 const loadFromJSONBin=async()=>{
   try{
+    // Try without auth first (public bin)
     const r=await fetch(JSONBIN_URL+'/latest',{
       headers:{'X-Master-Key':JSONBIN_KEY}
     })
     if(r.ok){
       const d=await r.json()
-      return d.record
+      return d.record||d
     }
   }catch(e){console.log('JSONBin load failed:',e)}
   return null
@@ -267,17 +268,17 @@ export default function VCGApp() {
   useEffect(()=>{
     try{localStorage.setItem('vcg_blocks',JSON.stringify(blocks))}catch{}
     const customBlocks=blocks.filter((b:Block)=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))
-    if(customBlocks.length>0){
-      syncBlocksToAPI(customBlocks)
-      // Save custom blocks to JSONBin too
-      saveToJSONBin({blocks:customBlocks,updated_at:new Date().toISOString()})
-    }
+    if(customBlocks.length>0) syncBlocksToAPI(customBlocks)
+    // Auto-save everything to cloud on any block change
+    saveAllToCloud(blocks,devices,sensors)
   },[blocks])
   useEffect(()=>{
     try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
   },[devices])
   useEffect(()=>{
     try{localStorage.setItem('vcg_sensors',JSON.stringify(sensors))}catch{}
+    // Auto-save to cloud when sensors update
+    if(Object.keys(sensors).length>0) saveAllToCloud(blocks,devices,sensors)
   },[sensors])
 
   // ── Weather API (OpenWeatherMap free) ────────────────────────────────────
@@ -375,6 +376,25 @@ export default function VCGApp() {
     }catch(e){console.log('Sync to API failed:',e)}
   },[])
 
+  // Master save to JSONBin — saves ALL data permanently
+  const saveAllToCloud=useCallback((
+    latestBlocks:Block[],
+    latestDevices:Device[],
+    latestSensors:any
+  )=>{
+    const customBlocks=latestBlocks.filter(b=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))
+    let g12=null
+    try{g12=JSON.parse(localStorage.getItem('vcg_group12_import')||'null')}catch{}
+    const data={
+      blocks:customBlocks,
+      devices:latestDevices,
+      sensors:latestSensors,
+      group12:g12,
+      updated_at:new Date().toISOString()
+    }
+    saveToJSONBin(data)
+  },[])
+
   const loadBlocksFromAPI=useCallback(async()=>{
     try{
       const r=await fetch(BLOCKS_API)
@@ -434,9 +454,9 @@ export default function VCGApp() {
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({devices})
       }).catch(()=>{})
-      // Save to JSONBin too
-      saveToJSONBin({devices,updated_at:new Date().toISOString()})
     }
+    // Auto-save everything to cloud on any device change
+    saveAllToCloud(blocks,devices,sensors)
   },[devices])
 
   const loadDevicesFromAPI=useCallback(async()=>{
@@ -752,8 +772,8 @@ export default function VCGApp() {
   try{localStorage.setItem('vcg_group12_import',JSON.stringify({block:b,devices:d,sensors:s,timestamp:Date.now()}))}catch{}
   // Save to Render API
   saveGroup12ToAPI({block:b,devices:d,sensors:s})
-  // Save to JSONBin (permanent cloud storage)
-  saveToJSONBin({group12:{block:b,devices:d,sensors:s},devices:d,updated_at:new Date().toISOString()})
+  // Save ALL data to JSONBin (permanent cloud)
+  setTimeout(()=>saveAllToCloud(blocks,[...devices,...d],{...sensors,[b.id]:s}),500)
   setScreen('home')
   addNotification({title:'✅ Group 12 Imported',message:`${b.name} — ${d.length} devices, ${s.length} sensors`,type:'success'})
 }} cardStyle={cardStyle} ironBtn={ironBtn} />}
