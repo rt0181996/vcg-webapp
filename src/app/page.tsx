@@ -3334,14 +3334,22 @@ function Group12Screen({T,onBack,onImport,cardStyle,ironBtn}:any) {
   }
 
   const parseCSV=(text:string)=>{
-    const lines=text.trim().split('\n')
-    const headers=lines[0].split(',').map(h=>h.trim().replace(/\r/g,''))
+    const lines=text.trim().split('\n').map(l=>l.replace(/\r/g,''))
+    const headers=lines[0].split(',').map(h=>h.trim())
     return lines.slice(1).map(line=>{
-      const vals=line.split(',')
+      // Handle CSV properly - split by comma but respect quoted fields
+      const vals:string[]=[]
+      let cur='',inQ=false
+      for(const c of line){
+        if(c==='"'){inQ=!inQ}
+        else if(c===','&&!inQ){vals.push(cur);cur=''}
+        else{cur+=c}
+      }
+      vals.push(cur)
       const row:Record<string,string>={}
-      headers.forEach((h,i)=>row[h]=(vals[i]||'').trim().replace(/\r/g,''))
+      headers.forEach((h,i)=>row[h]=(vals[i]||'').trim())
       return row
-    }).filter(r=>r['ngsi_id'])
+    }).filter(r=>r['ngsi_id']&&r['ngsi_id'].trim().length>0)
   }
 
   const buildPreview=(rows:any[],existingBlocks:any[])=>{
@@ -3355,7 +3363,9 @@ function Group12Screen({T,onBack,onImport,cardStyle,ironBtn}:any) {
     // Extract all real values from CSV
     const getVal=(prop:string)=>{
       const r=latest[prop]
-      return r?parseFloat(r['value_only']||'0'):null
+      if(!r) return null
+      const v=parseFloat(r['value_only']||r['value']||'0')
+      return isNaN(v)?null:v
     }
 
     const temp=getVal('temperature')
