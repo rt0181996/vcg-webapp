@@ -528,7 +528,61 @@ export default function VCGApp() {
     // 3. Also sync from Render API
     const t1=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI()},3000)
     const t2=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI();loadBlocksFromAPI()},8000)
-    return ()=>{clearTimeout(t1);clearTimeout(t2)}
+
+    // ── Real-time bidirectional sync ──────────────────────────────────────
+    // Poll JSONBin every 30 seconds for changes from other devices
+    const syncInterval=setInterval(async()=>{
+      try{
+        const data=await loadFromJSONBin()
+        if(!data) return
+
+        // Sync blocks from other devices
+        if(data.blocks?.length){
+          setBlocks((prev:Block[])=>{
+            let updated=[...prev]
+            let changed=false
+            data.blocks.forEach((b:Block)=>{
+              const idx=updated.findIndex(x=>x.id===b.id)
+              if(idx===-1){updated=[...updated,b];changed=true}
+              else if(JSON.stringify(updated[idx])!==JSON.stringify(b)){
+                updated=updated.map(x=>x.id===b.id?b:x);changed=true
+              }
+            })
+            // Remove blocks deleted on other device
+            const cloudIds=data.blocks.map((b:Block)=>b.id)
+            const defaultIds=['BLK-A','BLK-B','BLK-C','BLK-D']
+            const filtered=updated.filter(b=>defaultIds.includes(b.id)||cloudIds.includes(b.id))
+            return filtered
+          })
+        }
+
+        // Sync devices from other devices
+        if(data.devices?.length){
+          setDevices((_prev:Device[])=>data.devices)
+        }
+
+        // Sync sensors from other devices
+        if(data.sensors&&Object.keys(data.sensors).length){
+          setSensors((prev:any)=>({...prev,...data.sensors}))
+        }
+
+        // Sync Group12 data
+        if(data.group12?.block){
+          const {block,devices:devs,sensors:sens}=data.group12
+          setBlocks((prev:Block[])=>prev.find(b=>b.id===block.id)
+            ?prev.map(b=>b.id===block.id?block:b)
+            :[...prev,block])
+          if(devs?.length) setDevices((prev:Device[])=>{
+            const filtered=prev.filter(d=>d.block!==block.id)
+            return[...filtered,...devs]
+          })
+          if(sens?.length) setSensors((prev:any)=>({...prev,[block.id]:sens}))
+          try{localStorage.setItem('vcg_group12_import',JSON.stringify(data.group12))}catch{}
+        }
+      }catch(e){console.log('Sync poll failed:',e)}
+    },30000) // every 30 seconds
+
+    return ()=>{clearTimeout(t1);clearTimeout(t2);clearInterval(syncInterval)}
   },[])
 
   const checkApi=useCallback(async()=>{
@@ -539,14 +593,35 @@ export default function VCGApp() {
   },[isOffline])
   useEffect(()=>{checkApi()},[])
 
-  const addBlock=(b:Block)=>{setBlocks(p=>[...p,b]);setSensors(p=>({...p,[b.id]:makeSensors()}));setEvs(p=>[...p,{id:`EVC-${b.id}`,block:b.id,status:'IDLE',power:0,sessionTime:0,soc:100}]);setHistory(p=>({...p,[b.id]:makeHistory(b.id)}))}
-  const addDevice=(d:Device)=>{setDevices(p=>[...p,d]);addNotification({title:'Device Registered',message:`${d.sfdi} added to ${d.block}`,type:'success'})}
+  const addBlock=(b:Block)=>{
+    setBlocks(p=>{
+      const newBlocks=[...p,b]
+      setTimeout(()=>saveAllToCloud(newBlocks,devices,sensors),100)
+      return newBlocks
+    })
+    setSensors((p:any)=>({...p,[b.id]:makeSensors()}))
+    setEvs((p:any)=>[...p,{id:`EVC-${b.id}`,block:b.id,status:'IDLE',power:0,sessionTime:0,soc:100}])
+    setHistory((p:any)=>({...p,[b.id]:makeHistory(b.id)}))
+    addNotification({title:'Community Added',message:`${b.name} joined the grid`,type:'success'})
+  }
+  const addDevice=(d:Device)=>{
+    const newDevices=[...devices,d]
+    setDevices(newDevices)
+    saveAllToCloud(blocks,newDevices,sensors)
+    addNotification({title:'Device Registered',message:`${d.sfdi} added to ${d.block}`,type:'success'})
+  }
   const deleteBlock=(id:string)=>{
-    setBlocks(p=>p.filter(b=>b.id!==id))
-    setDevices(p=>p.filter(d=>d.block!==id))
-    setSensors((p:any)=>{const n={...p};delete n[id];return n})
-    // Delete from API
+    const newBlocks=blocks.filter((b:Block)=>b.id!==id)
+    const newDevices=devices.filter((d:Device)=>d.block!==id)
+    const newSensors={...sensors}
+    delete newSensors[id]
+    setBlocks(newBlocks)
+    setDevices(newDevices)
+    setSensors(newSensors)
+    // Delete from Render API
     fetch(BLOCKS_API+'/'+id,{method:'DELETE'}).catch(()=>{})
+    // Save updated state to JSONBin immediately
+    saveAllToCloud(newBlocks,newDevices,newSensors)
     addNotification({title:'Block Deleted',message:`Block ${id} removed`,type:'info'})
   }
   const goHome=()=>{setScreen('home');setActiveBlock(null);setActiveDevice(null)}
