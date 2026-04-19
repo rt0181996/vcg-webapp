@@ -1654,7 +1654,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
                   }
                   const sKey=sensorMap[d.type]
                   const sensor=sKey?sensors.find((s:any)=>s.label===sKey||s.label.includes(sKey.split(' ')[0])):null
-                  const dataVal=stateMapL[d.type]||(sensor?`${sensor.value} ${sensor.unit}`):(d.power&&d.power>0?(d.power>=1000?(d.power/1000).toFixed(1)+' kW':d.power+' W'):'—')
+                  const dataVal=stateMapL[d.type]||(sensor?`${sensor.value} ${sensor.unit}`:null)||(d.power&&d.power>0?(d.power>=1000?(d.power/1000).toFixed(1)+' kW':d.power+' W'):'—')
                   return (
                     <div key={d.sfdi||i} style={{
                       display:'flex',alignItems:'center',gap:8,
