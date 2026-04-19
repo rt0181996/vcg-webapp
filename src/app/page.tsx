@@ -6,7 +6,7 @@ const API_V1 = 'https://virtual-gateway.onrender.com/api/v1'
 const BLOCKS_API = 'https://virtual-gateway.onrender.com/api/v1/blocks'
 const JSONBIN_KEY = '$2a$10$NSdKkf/i386oNfLqPRUgR.IF/SUOXEAFSia/RqfgHUOvdeDLmNn9i'
 const JSONBIN_BIN = '69e5472b36566621a8ce5d18'
-const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`
+const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/'+JSONBIN_BIN
 
 // Save all VCG data to JSONBin (permanent cloud storage)
 const saveToJSONBin=async(data:any)=>{
