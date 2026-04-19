@@ -4,6 +4,34 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 const API = 'https://virtual-gateway.onrender.com'
 const API_V1 = 'https://virtual-gateway.onrender.com/api/v1'
 const BLOCKS_API = 'https://virtual-gateway.onrender.com/api/v1/blocks'
+const JSONBIN_KEY = '$2a$10$NSdKkf/i386oNfLqPRUgR.IF/SUOXEAFSia/RqfgHUOvdeDLmNn9i'
+const JSONBIN_BIN = '69e5472b36566621a8ce5d18'
+const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`
+
+// Save all VCG data to JSONBin (permanent cloud storage)
+const saveToJSONBin=async(data:any)=>{
+  try{
+    await fetch(JSONBIN_URL,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Master-Key':JSONBIN_KEY},
+      body:JSON.stringify({...data,updated_at:new Date().toISOString()})
+    })
+  }catch(e){console.log('JSONBin save failed:',e)}
+}
+
+// Load all VCG data from JSONBin
+const loadFromJSONBin=async()=>{
+  try{
+    const r=await fetch(JSONBIN_URL+'/latest',{
+      headers:{'X-Master-Key':JSONBIN_KEY}
+    })
+    if(r.ok){
+      const d=await r.json()
+      return d.record
+    }
+  }catch(e){console.log('JSONBin load failed:',e)}
+  return null
+}
 const FIWARE = 'http://localhost:1026' // Local Orion broker
 const APP_URL = 'https://vcg-webapp.vercel.app'
 
@@ -238,9 +266,12 @@ export default function VCGApp() {
   // ── localStorage: save blocks/devices on change ──────────────────────────
   useEffect(()=>{
     try{localStorage.setItem('vcg_blocks',JSON.stringify(blocks))}catch{}
-    // Sync non-default blocks to API
-    const customBlocks=blocks.filter(b=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))
-    if(customBlocks.length>0) syncBlocksToAPI(customBlocks)
+    const customBlocks=blocks.filter((b:Block)=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))
+    if(customBlocks.length>0){
+      syncBlocksToAPI(customBlocks)
+      // Save custom blocks to JSONBin too
+      saveToJSONBin({blocks:customBlocks,updated_at:new Date().toISOString()})
+    }
   },[blocks])
   useEffect(()=>{
     try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
@@ -396,13 +427,15 @@ export default function VCGApp() {
   // Sync devices to API when they change
   useEffect(()=>{
     try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
-    // Sync to API
+    // Sync to Render API
     if(devices.length>0){
       fetch(API_V1+'/devices/sync',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({devices})
       }).catch(()=>{})
+      // Save to JSONBin too
+      saveToJSONBin({devices,updated_at:new Date().toISOString()})
     }
   },[devices])
 
@@ -418,29 +451,63 @@ export default function VCGApp() {
     }catch(e){console.log('Load devices from API failed:',e)}
   },[])
 
-  // Load from localStorage first (instant), then API (sync)
+  // Load from localStorage first (instant), then JSONBin (permanent), then API
   useEffect(()=>{
-    // 1. Load Group12 from localStorage immediately
+    // 1. Load from localStorage immediately (same browser)
     try{
       const saved=localStorage.getItem('vcg_group12_import')
       if(saved){
         const {block,devices:devs,sensors:sens}=JSON.parse(saved)
         if(block){
-          setBlocks(p=>p.find(b=>b.id===block.id)?p.map(b=>b.id===block.id?block:b):[...p,block])
-          if(devs?.length) setDevices(p=>{const f=p.filter(d=>d.block!==block.id);return[...f,...devs]})
-          if(sens?.length) setSensors(p=>({...p,[block.id]:sens}))
+          setBlocks(p=>p.find((b:Block)=>b.id===block.id)?p.map((b:Block)=>b.id===block.id?block:b):[...p,block])
+          if(devs?.length) setDevices((p:Device[])=>{const f=p.filter((d:Device)=>d.block!==block.id);return[...f,...devs]})
+          if(sens?.length) setSensors((p:any)=>({...p,[block.id]:sens}))
         }
       }
     }catch{}
 
-    // 2. Then sync from API (catches any updates from other devices)
-    loadDevicesFromAPI()
-    loadGroup12FromAPI()
-    loadBlocksFromAPI()
+    // 2. Load from JSONBin (permanent cloud - works across all devices)
+    loadFromJSONBin().then((data:any)=>{
+      if(!data) return
+      try{
+        // Restore blocks
+        if(data.blocks?.length){
+          setBlocks((p:Block[])=>{
+            let updated=[...p]
+            data.blocks.forEach((b:Block)=>{
+              if(!updated.find(x=>x.id===b.id)) updated=[...updated,b]
+              else updated=updated.map(x=>x.id===b.id?b:x)
+            })
+            return updated
+          })
+        }
+        // Restore devices
+        if(data.devices?.length){
+          setDevices((p:Device[])=>{
+            const existingIds=new Set(p.map(d=>d.sfdi))
+            const newDevs=data.devices.filter((d:Device)=>!existingIds.has(d.sfdi))
+            return [...p,...newDevs]
+          })
+        }
+        // Restore sensors
+        if(data.sensors&&Object.keys(data.sensors).length){
+          setSensors((p:any)=>({...data.sensors,...p}))
+        }
+        // Restore Group12
+        if(data.group12){
+          const {block,devices:devs,sensors:sens}=data.group12
+          if(block){
+            setBlocks((p:Block[])=>p.find(b=>b.id===block.id)?p.map(b=>b.id===block.id?block:b):[...p,block])
+            if(devs?.length) setDevices((p:Device[])=>{const f=p.filter(d=>d.block!==block.id);return[...f,...devs]})
+            if(sens?.length) setSensors((p:any)=>({...p,[block.id]:sens}))
+          }
+        }
+      }catch(e){console.log('JSONBin restore error:',e)}
+    })
 
-    // 3. Retry for Render wake-up
-    const t1=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI()},4000)
-    const t2=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI();loadBlocksFromAPI()},10000)
+    // 3. Also sync from Render API
+    const t1=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI()},3000)
+    const t2=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI();loadBlocksFromAPI()},8000)
     return ()=>{clearTimeout(t1);clearTimeout(t2)}
   },[])
 
@@ -681,10 +748,12 @@ export default function VCGApp() {
   addBlock(b)
   d.forEach((dev:Device)=>addDevice(dev))
   setSensors((p:any)=>({...p,[b.id]:s}))
-  // Save to localStorage for persistence
+  // Save to localStorage (same browser)
   try{localStorage.setItem('vcg_group12_import',JSON.stringify({block:b,devices:d,sensors:s,timestamp:Date.now()}))}catch{}
-  // Save to API
+  // Save to Render API
   saveGroup12ToAPI({block:b,devices:d,sensors:s})
+  // Save to JSONBin (permanent cloud storage)
+  saveToJSONBin({group12:{block:b,devices:d,sensors:s},devices:d,updated_at:new Date().toISOString()})
   setScreen('home')
   addNotification({title:'✅ Group 12 Imported',message:`${b.name} — ${d.length} devices, ${s.length} sensors`,type:'success'})
 }} cardStyle={cardStyle} ironBtn={ironBtn} />}
@@ -693,11 +762,27 @@ export default function VCGApp() {
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='fiware'    && <FIWAREScreen    T={T} blocks={blocks} sensors={sensors} apiOnline={apiOnline} isOffline={isOffline} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={()=>{checkApi();checkEndpoints()}} onSyncAll={async()=>{
+  // Load from JSONBin first (permanent)
+  const jbData=await loadFromJSONBin()
+  if(jbData?.group12){
+    const {block,devices:devs,sensors:sens}=jbData.group12
+    if(block){
+      setBlocks((p:Block[])=>p.find(b=>b.id===block.id)?p.map(b=>b.id===block.id?block:b):[...p,block])
+      if(devs?.length) setDevices((p:Device[])=>{const f=p.filter(d=>d.block!==block.id);return[...f,...devs]})
+      if(sens?.length) setSensors((p:any)=>({...p,[block.id]:sens}))
+    }
+  }
+  if(jbData?.devices?.length){
+    setDevices((p:Device[])=>{
+      const existingIds=new Set(p.map(d=>d.sfdi))
+      return [...p,...jbData.devices.filter((d:Device)=>!existingIds.has(d.sfdi))]
+    })
+  }
+  // Also sync from Render API
   await loadDevicesFromAPI()
   await loadGroup12FromAPI()
   await loadBlocksFromAPI()
-  addNotification({title:'🔄 Sync Complete',message:'All data loaded from API',type:'success'})
-  // Go home and back to force refresh
+  addNotification({title:'🔄 Sync Complete',message:'Data loaded from cloud storage',type:'success'})
   if(screen==='block'){goHome()}
 }} onShowQR={()=>setShowQR(true)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} onToggleDark={()=>setDarkMode(p=>!p)} isOffline={isOffline} cardStyle={cardStyle} ironBtn={ironBtn} goldBtn={goldBtn} endpointHealth={endpointHealth} pinLocked={pinLocked} savedPin={savedPin} onPinChange={(pin:string)=>{setSavedPin(pin);if(pin){localStorage.setItem('vcg_pin',pin);localStorage.setItem('vcg_pin_enabled','true');setPinLocked(true)}else{localStorage.removeItem('vcg_pin');localStorage.setItem('vcg_pin_enabled','false');setPinLocked(false)}}} />}
       </div>
