@@ -103,14 +103,7 @@ const INIT_BLOCKS:Block[]=[]
 const INIT_SENSORS:Record<string,Sensor[]>={}
 const INIT_EVS:EV[]=[]
 const INIT_DEVICES:Device[]=[
-  {sfdi:'SM-A001',lfdi:'LFDI-SM-A001',type:'Smart Meter',    block:'BLK-A',status:'Online', power:1400,voltage:230,lastSeen:'Just now'},
-  {sfdi:'PV-A002',lfdi:'LFDI-PV-A002',type:'Solar Inverter', block:'BLK-A',status:'Online', power:3500,voltage:230,lastSeen:'1 min ago'},
-  {sfdi:'EV-A003',lfdi:'LFDI-EV-A003',type:'EV Charger',     block:'BLK-A',status:'Online', power:7400,voltage:230,lastSeen:'Just now'},
-  {sfdi:'SM-B001',lfdi:'LFDI-SM-B001',type:'Smart Meter',    block:'BLK-B',status:'Online', power:1200,voltage:230,lastSeen:'2 min ago'},
-  {sfdi:'BA-B002',lfdi:'LFDI-BA-B002',type:'Battery Storage', block:'BLK-B',status:'Warning',power:5000,voltage:48, lastSeen:'5 min ago'},
-  {sfdi:'SM-C001',lfdi:'LFDI-SM-C001',type:'Smart Meter',    block:'BLK-C',status:'Online', power:1400,voltage:230,lastSeen:'Just now'},
-  {sfdi:'WT-C002',lfdi:'LFDI-WT-C002',type:'Wind Turbine',   block:'BLK-C',status:'Online', power:8000,voltage:400,lastSeen:'30s ago'},
-  {sfdi:'SM-D001',lfdi:'LFDI-SM-D001',type:'Smart Meter',    block:'BLK-D',status:'Online', power:1400,voltage:230,lastSeen:'3 min ago'},
+
 ]
 
 // ── Theme tokens ──────────────────────────────────────────────────────────────
@@ -159,7 +152,7 @@ export default function VCGApp() {
   })
   const [alerts,setAlerts]=useState<Alert[]>([])
   const [notifications,setNotifications]=useState<Notification[]>([])
-  const [history,setHistory]=useState<Record<string,HistoryEntry[]>>({'BLK-A':makeHistory('BLK-A'),'BLK-B':makeHistory('BLK-B'),'BLK-C':makeHistory('BLK-C'),'BLK-D':makeHistory('BLK-D')})
+  const [history,setHistory]=useState<Record<string,HistoryEntry[]>>({})
   const [showQR,setShowQR]=useState(false)
   const [installPrompt,setInstallPrompt]=useState<any>(null)
   const [showInstallBanner,setShowInstallBanner]=useState(false)
@@ -345,10 +338,13 @@ export default function VCGApp() {
         // Update sensor temps and solar with real weather
         setSensors(prev=>{
           const n={...prev}
-          INIT_BLOCKS.forEach(b=>{
-            const w=results[b.location]
-            if(w&&n[b.id]){
-              n[b.id]=n[b.id].map(s=>{
+          // Update weather for all real blocks
+          Object.keys(n).forEach(blockId=>{
+            const block=blocks.find((b:Block)=>b.id===blockId)
+            if(!block) return
+            const w=results[block.location]||Object.values(results)[0]
+            if(w&&n[blockId]){
+              n[blockId]=n[blockId].map((s:Sensor)=>{
                 if(s.label==='Temperature') return {...s,value:w.temp,bar:Math.min(Math.round(w.temp/40*100),100)}
                 if(s.label==='Solar Irradiance') return {...s,value:w.solar,bar:Math.min(Math.round(w.solar/1000*100),100)}
                 if(s.label==='Wind Speed') return {...s,value:+(w.windSpeed*3.6).toFixed(1),bar:Math.min(Math.round(w.windSpeed*3.6/60*100),100)}
@@ -511,7 +507,7 @@ export default function VCGApp() {
     loadFromJSONBin().then((data:any)=>{
       if(!data) return
       try{
-        // Restore blocks
+        // Restore blocks + init history for charts
         if(data.blocks?.length){
           setBlocks((p:Block[])=>{
             let updated=[...p]
@@ -520,6 +516,11 @@ export default function VCGApp() {
               else updated=updated.map(x=>x.id===b.id?b:x)
             })
             return updated
+          })
+          setHistory((p:any)=>{
+            const n={...p}
+            data.blocks.forEach((b:Block)=>{if(!n[b.id]) n[b.id]=makeHistory(b.id)})
+            return n
           })
         }
         // Restore devices
@@ -561,16 +562,20 @@ export default function VCGApp() {
         if(data.blocks?.length){
           setBlocks((prev:Block[])=>{
             let updated=[...prev]
-            let changed=false
             data.blocks.forEach((b:Block)=>{
               const idx=updated.findIndex(x=>x.id===b.id)
-              if(idx===-1){updated=[...updated,b];changed=true}
+              if(idx===-1){updated=[...updated,b]}
               else if(JSON.stringify(updated[idx])!==JSON.stringify(b)){
-                updated=updated.map(x=>x.id===b.id?b:x);changed=true
+                updated=updated.map(x=>x.id===b.id?b:x)
               }
             })
-            // Remove blocks deleted on other device
             return updated
+          })
+          // Init history for synced blocks so charts work
+          setHistory((p:any)=>{
+            const n={...p}
+            data.blocks.forEach((b:Block)=>{if(!n[b.id]) n[b.id]=makeHistory(b.id)})
+            return n
           })
         }
 
@@ -595,6 +600,8 @@ export default function VCGApp() {
             return[...filtered,...devs]
           })
           if(sens?.length) setSensors((prev:any)=>({...prev,[block.id]:sens}))
+          // Ensure Group12 block has history for charts
+          setHistory((p:any)=>({...p,[block.id]:p[block.id]||makeHistory(block.id)}))
           try{localStorage.setItem('vcg_group12_import',JSON.stringify(data.group12))}catch{}
         }
       }catch(e){console.log('Sync poll failed:',e)}
@@ -884,6 +891,8 @@ export default function VCGApp() {
   try{localStorage.setItem('vcg_group12_import',JSON.stringify({block:b,devices:d,sensors:s,timestamp:Date.now()}))}catch{}
   // Save to Render API
   saveGroup12ToAPI({block:b,devices:d,sensors:s})
+  // Generate history for imported block so charts work
+  setHistory((p:any)=>({...p,[b.id]:makeHistory(b.id)}))
   // Save ALL data to JSONBin (permanent cloud)
   setTimeout(()=>saveAllToCloud(blocks,[...devices,...d],{...sensors,[b.id]:s}),500)
   setScreen('home')
@@ -2120,7 +2129,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
 
 // ── 7. DEVICE SIMULATOR ───────────────────────────────────────────────────────
 function SimulatorScreen({T,blocks,apiOnline,isOffline,onDeviceAdded,addNotification,cardStyle,ironBtn,goldBtn,pill}:any) {
-  const [selBlock,setSelBlock]=useState('BLK-A')
+  const [selBlock,setSelBlock]=useState('')
   const [selType,setSelType]=useState('Smart Meter')
   const [running,setRunning]=useState(false)
   const [readings,setReadings]=useState<SimReading[]>([])
@@ -2755,7 +2764,7 @@ function DemandScreen({T,blocks,apiOnline,cardStyle,pill,goldBtn}:any) {
   )
 }
 function HistoryScreen({T,history,blocks,cardStyle,ironBtn}:any) {
-  const [sel,setSel]=useState('BLK-A')
+  const [sel,setSel]=useState('')
   const entries:HistoryEntry[]=(history[sel]||[]).slice().reverse().slice(0,20)
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -2918,7 +2927,7 @@ function CompareScreen({T,blocks,sensors,cardStyle}:any) {
 
 // ── REGISTER ──────────────────────────────────────────────────────────────────
 function RegisterScreen({T,blocks,activeBlock,onBack,apiOnline,onDeviceAdded,cardStyle,ironBtn,lbl,inp}:any) {
-  const [form,setForm]=useState({sfdi:'',lfdi:'',deviceType:'Smart Meter',block:activeBlock?.id||blocks[0]?.id||'BLK-A',realPower:'',voltage:''})
+  const [form,setForm]=useState({sfdi:'',lfdi:'',deviceType:'Smart Meter',block:activeBlock?.id||blocks[0]?.id||'',realPower:'',voltage:''})
   const [msg,setMsg]=useState('');const [loading,setLoading]=useState(false)
   const submit=async()=>{
     if(!form.sfdi||!form.lfdi){setMsg('⚠️ SFDI and LFDI required');return}
