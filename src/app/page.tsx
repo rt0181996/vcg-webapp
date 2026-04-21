@@ -1,10 +1,4 @@
 'use client'
-// Load SheetJS for Excel support
-if(typeof window!=='undefined'&&!(window as any).XLSX){
-  const s=document.createElement('script')
-  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
-  document.head.appendChild(s)
-}
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 
 const API = 'https://virtual-gateway.onrender.com'
@@ -498,8 +492,17 @@ export default function VCGApp() {
     }catch(e){console.log('Load devices from API failed:',e)}
   },[])
 
+  // Load SheetJS for Excel support (must be inside component for SSR safety)
+  useEffect(()=>{
+    if(typeof window!=='undefined'&&!(window as any).XLSX){
+      const s=document.createElement('script')
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+      document.head.appendChild(s)
+    }
+  },[])
+
   // Track when local changes were made — prevents sync from overwriting our deletes
-  const lastLocalChange=React.useRef<number>(0)
+  const lastLocalChange=useRef<number>(0)
   const markLocalChange=()=>{ lastLocalChange.current=Date.now() }
 
   // Load from localStorage first (instant), then JSONBin (permanent), then API
