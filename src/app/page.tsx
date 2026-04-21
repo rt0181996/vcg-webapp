@@ -571,11 +571,21 @@ export default function VCGApp() {
     const t2=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI();loadBlocksFromAPI()},8000)
 
     // ── Real-time bidirectional sync ──────────────────────────────────────
-    // Poll JSONBin every 30 seconds for changes from other devices
+    // Poll JSONBin every 10 seconds for changes from other devices
     const syncInterval=setInterval(async()=>{
       try{
+        // Skip sync if we made a local change in the last 15 seconds
+        // This prevents the poller from restoring deleted data
+        if(Date.now()-lastLocalChange.current < 15000) return
+
         const data=await loadFromJSONBin()
         if(!data) return
+        
+        // Only sync if cloud data is newer than our last local change
+        if(data.updated_at){
+          const cloudTime=new Date(data.updated_at).getTime()
+          if(cloudTime < lastLocalChange.current) return
+        }
 
         // Sync blocks from other devices (filter demo blocks)
         if(data.blocks?.length){
@@ -638,6 +648,7 @@ export default function VCGApp() {
   useEffect(()=>{checkApi()},[])
 
   const addBlock=(b:Block)=>{
+    markLocalChange()
     setBlocks(p=>{
       const newBlocks=[...p,b]
       setTimeout(()=>saveAllToCloud(newBlocks,devices,sensors),100)
@@ -650,6 +661,7 @@ export default function VCGApp() {
     showSuccess(`${b.name} added to grid! ⚡`)
   }
   const addDevice=(d:Device)=>{
+    markLocalChange()
     const newDevices=[...devices,d]
     setDevices(newDevices)
     saveAllToCloud(blocks,newDevices,sensors)
@@ -657,6 +669,7 @@ export default function VCGApp() {
     showSuccess(`Device ${d.sfdi} registered!`)
   }
   const deleteBlock=(id:string)=>{
+    markLocalChange()
     const newBlocks=blocks.filter((b:Block)=>b.id!==id)
     const newDevices=devices.filter((d:Device)=>d.block!==id)
     const newSensors={...sensors}
@@ -666,7 +679,7 @@ export default function VCGApp() {
     setSensors(newSensors)
     // Delete from Render API
     fetch(BLOCKS_API+'/'+id,{method:'DELETE'}).catch(()=>{})
-    // Save updated state to JSONBin immediately
+    // Save updated (empty) state to JSONBin immediately
     saveAllToCloud(newBlocks,newDevices,newSensors)
     addNotification({title:'Block Deleted',message:`Block ${id} removed`,type:'info'})
   }
@@ -676,6 +689,10 @@ export default function VCGApp() {
   const totalGen=blocks.reduce((s,b)=>s+b.generation,0)
   const totalCon=blocks.reduce((s,b)=>s+b.consumption,0)
   const totalNet=+(totalGen-totalCon).toFixed(1)
+  // Track when local changes were made — prevents sync from overwriting our deletes
+  const lastLocalChange=React.useRef<number>(0)
+  const markLocalChange=()=>{ lastLocalChange.current=Date.now() }
+
   // Success toast state
   const [successToast,setSuccessToast]=useState<string|null>(null)
   const showSuccess=(msg:string)=>{
@@ -890,13 +907,13 @@ export default function VCGApp() {
       {/* CONTENT */}
       <div style={{position:'relative',zIndex:1,padding:'0 12px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%',animation:'pageEnter 0.4s ease',boxSizing:'border-box'}} key={screen}>
         {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onAddCommunity2={(b:Block)=>addBlock(b)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} weatherData={weatherData} onDeleteBlock={deleteBlock} />}
-        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} allDevices={devices} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>{const nd=devices.filter(d=>d.sfdi!==sfdi);setDevices(nd);saveAllToCloud(blocks,nd,sensors)}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
+        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} allDevices={devices} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>{markLocalChange();const nd=devices.filter(d=>d.sfdi!==sfdi);setDevices(nd);saveAllToCloud(blocks,nd,sensors)}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
 
         {screen==='alerts'    && <AlertsScreen    T={T} blocks={blocks} sensors={sensors} alerts={alerts} onMarkRead={(id:string)=>setAlerts(p=>p.map(a=>a.id===id?{...a,read:true}:a))} onMarkAll={()=>setAlerts(p=>p.map(a=>({...a,read:true})))} cardStyle={cardStyle} pill={pill} />}
         {screen==='demand'    && <DemandScreen    T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} pill={pill} goldBtn={goldBtn} />}
         {screen==='history'   && <HistoryScreen   T={T} history={history} blocks={blocks} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='cost'      && <CostScreen      T={T} blocks={blocks} sensors={sensors} cardStyle={cardStyle} />}
-        {screen==='devices'   && <DevicesScreen   T={T} devices={devices} blocks={blocks} activeDevice={activeDevice} onDelete={(s:string)=>{const nd=devices.filter(d=>d.sfdi!==s);setDevices(nd);saveAllToCloud(blocks,nd,sensors)}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
+        {screen==='devices'   && <DevicesScreen   T={T} devices={devices} blocks={blocks} activeDevice={activeDevice} onDelete={(s:string)=>{markLocalChange();const nd=devices.filter(d=>d.sfdi!==s);setDevices(nd);saveAllToCloud(blocks,nd,sensors)}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='map'       && <MapScreen       T={T} blocks={blocks} cardStyle={cardStyle} pill={pill} />}
         {screen==='compare'   && <CompareScreen   T={T} blocks={blocks} sensors={sensors} cardStyle={cardStyle} />}
         {screen==='register'  && <RegisterScreen  T={T} blocks={blocks} activeBlock={activeBlock} onBack={()=>setScreen(activeBlock?'block':'home')} apiOnline={apiOnline} onDeviceAdded={addDevice} cardStyle={cardStyle} ironBtn={ironBtn} lbl={lbl} inp={inp} />}
@@ -906,6 +923,7 @@ export default function VCGApp() {
   addBlock(b)
   d.forEach((dev:Device)=>addDevice(dev))
   setSensors((p:any)=>({...p,[b.id]:s}))
+  markLocalChange()
   // Save to localStorage (same browser)
   try{localStorage.setItem('vcg_group12_import',JSON.stringify({block:b,devices:d,sensors:s,timestamp:Date.now()}))}catch{}
   // Save to Render API
