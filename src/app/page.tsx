@@ -275,22 +275,30 @@ export default function VCGApp() {
   // Track if we're currently applying data from cloud sync
   // Prevents auto-save from echoing cloud data back to cloud
   const isSyncingFromCloud=useRef(false)
+  
+  // Track if initial sync from JSONBin is complete
+  // Prevents mobile from uploading stale localStorage data to cloud
+  const initialSyncDone=useRef(false)
 
   // ── localStorage: save blocks/devices on change ──────────────────────────
   useEffect(()=>{
     try{localStorage.setItem('vcg_blocks',JSON.stringify(blocks))}catch{}
     const customBlocks=blocks
     if(customBlocks.length>0) syncBlocksToAPI(customBlocks)
-    // Auto-save to cloud ONLY if change was user-initiated, not from sync
-    if(!isSyncingFromCloud.current) saveAllToCloud(blocks,devices,sensors)
+    // Auto-save to cloud ONLY if initial sync done AND not echoing cloud data
+    if(initialSyncDone.current&&!isSyncingFromCloud.current){
+      saveAllToCloud(blocks,devices,sensors)
+    }
   },[blocks])
   useEffect(()=>{
     try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
   },[devices])
   useEffect(()=>{
     try{localStorage.setItem('vcg_sensors',JSON.stringify(sensors))}catch{}
-    // Auto-save to cloud ONLY if change was user-initiated
-    if(Object.keys(sensors).length>0&&!isSyncingFromCloud.current) saveAllToCloud(blocks,devices,sensors)
+    // Auto-save to cloud ONLY if initial sync done AND user change
+    if(initialSyncDone.current&&!isSyncingFromCloud.current&&Object.keys(sensors).length>0){
+      saveAllToCloud(blocks,devices,sensors)
+    }
   },[sensors])
 
   // ── Weather API (OpenWeatherMap free) ────────────────────────────────────
@@ -472,8 +480,8 @@ export default function VCGApp() {
   // Sync devices to API when they change
   useEffect(()=>{
     try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
-    // Sync to Render API (only if user change, not sync echo)
-    if(!isSyncingFromCloud.current){
+    // Sync to Render API (only if initial sync done AND user change)
+    if(initialSyncDone.current&&!isSyncingFromCloud.current){
       if(devices.length>0){
         fetch(API_V1+'/devices/sync',{
           method:'POST',
@@ -481,7 +489,6 @@ export default function VCGApp() {
           body:JSON.stringify({devices})
         }).catch(()=>{})
       }
-      // Auto-save everything to cloud on any device change
       saveAllToCloud(blocks,devices,sensors)
     }
   },[devices])
@@ -563,6 +570,9 @@ export default function VCGApp() {
           }
         }
       }catch(e){console.log('JSONBin restore error:',e)}
+      // Mark initial sync as done so auto-save works from now on
+      initialSyncDone.current=true
+      console.log('✅ Initial sync complete - auto-save enabled')
     })
 
     // 3. Also sync from Render API
