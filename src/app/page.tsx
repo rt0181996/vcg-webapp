@@ -10,6 +10,31 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 const API = 'https://virtual-gateway.onrender.com'
 const API_V1 = 'https://virtual-gateway.onrender.com/api/v1'
 const BLOCKS_API = 'https://virtual-gateway.onrender.com/api/v1/blocks'
+
+// ═══════════════════════════════════════════════════════════
+// ENERGY CALCULATIONS — Real Irish data sources
+// ═══════════════════════════════════════════════════════════
+// Source: Commission for Regulation of Utilities (CRU) Ireland, Price Review 6, 2025
+// cru.ie — Residential electricity tariff average
+const IRISH_ELECTRICITY_RATE = 0.38  // €/kWh
+
+// Source: SEAI Energy in Ireland 2024 Report
+// Irish grid carbon intensity (gCO2/kWh converted to kg/kWh)
+const IRISH_GRID_CARBON = 0.296      // kg CO₂ per kWh
+
+// Cost formula: Cost (€) = Power (kW) × Rate (€/kWh) × Hours (h)
+const calcCost = (power_kW: number, hours: number = 1) => 
+  +(power_kW * IRISH_ELECTRICITY_RATE * hours).toFixed(2)
+
+// CO₂ formula: Saved (kg) = Energy (kWh) × Grid Intensity (kg/kWh)
+const calcCO2Saved = (energy_kWh: number) => 
+  +(energy_kWh * IRISH_GRID_CARBON).toFixed(2)
+
+// Demand Response Savings formula: 
+// Savings (€) = Reduced Power (kW) × Duration (hours) × Rate (€/kWh)
+const calcDRSaving = (reduction_kW: number, duration_min: number) =>
+  +(reduction_kW * (duration_min / 60) * IRISH_ELECTRICITY_RATE).toFixed(2)
+
 const JSONBIN_KEY = '$2a$10$NSdKkf/i386oNfLqPRUgR.IF/SUOXEAFSia/RqfgHUOvdeDLmNn9i'
 const JSONBIN_BIN = '69e5472b36566621a8ce5d18'
 const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/'+JSONBIN_BIN
@@ -51,7 +76,7 @@ interface Alert { id:string;block:string;type:string;message:string;severity:'hi
 interface HistoryEntry { time:string;block:string;generation:number;consumption:number;net:number;cost:number }
 interface Notification { id:string;title:string;message:string;type:'info'|'warning'|'error'|'success';time:string;read:boolean }
 interface SimReading { deviceId:string;type:string;block:string;power:number;voltage:number;temperature:number;timestamp:string;sent:boolean }
-type Screen = 'home'|'block'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'group12'
+type Screen = 'home'|'block'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'group12'|'methodology'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const makeSensors=(t=20,sol=600,bat=50,gi=1,ge=1,ws=25,ec=0.38,co2=2):Sensor[]=>[
@@ -69,7 +94,7 @@ const makeHistory=(blockId:string,count=12):HistoryEntry[]=>{
   return Array.from({length:count},(_,i)=>{
     const gen=+(100+Math.random()*100).toFixed(1), con=+(70+Math.random()*90).toFixed(1)
     const d=new Date(now); d.setHours(d.getHours()-count+i)
-    return {time:d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),block:blockId,generation:gen,consumption:con,net:+(gen-con).toFixed(1),cost:+(con*0.38/1000*3600).toFixed(3)}
+    return {time:d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),block:blockId,generation:gen,consumption:con,net:+(gen-con).toFixed(1),cost:+(con*IRISH_ELECTRICITY_RATE).toFixed(2)}
   })
 }
 
@@ -223,7 +248,7 @@ export default function VCGApp() {
               generation:b.generation,
               consumption:b.consumption,
               net:b.net,
-              cost:+(b.consumption*0.38/1000*3600).toFixed(3)
+              cost:+(b.consumption*IRISH_ELECTRICITY_RATE).toFixed(2)
             }
             n[b.id]=[...(n[b.id]||[]).slice(-20),e]
           }
@@ -596,12 +621,14 @@ export default function VCGApp() {
     setEvs((p:any)=>[...p,{id:`EVC-${b.id}`,block:b.id,status:'IDLE',power:0,sessionTime:0,soc:100}])
     setHistory((p:any)=>({...p,[b.id]:makeHistory(b.id)}))
     addNotification({title:'Community Added',message:`${b.name} joined the grid`,type:'success'})
+    showSuccess(`${b.name} added to grid! ⚡`)
   }
   const addDevice=(d:Device)=>{
     const newDevices=[...devices,d]
     setDevices(newDevices)
     saveAllToCloud(blocks,newDevices,sensors)
     addNotification({title:'Device Registered',message:`${d.sfdi} added to ${d.block}`,type:'success'})
+    showSuccess(`Device ${d.sfdi} registered!`)
   }
   const deleteBlock=(id:string)=>{
     const newBlocks=blocks.filter((b:Block)=>b.id!==id)
@@ -623,6 +650,13 @@ export default function VCGApp() {
   const totalGen=blocks.reduce((s,b)=>s+b.generation,0)
   const totalCon=blocks.reduce((s,b)=>s+b.consumption,0)
   const totalNet=+(totalGen-totalCon).toFixed(1)
+  // Success toast state
+  const [successToast,setSuccessToast]=useState<string|null>(null)
+  const showSuccess=(msg:string)=>{
+    setSuccessToast(msg)
+    setTimeout(()=>setSuccessToast(null),2500)
+  }
+
   const unreadAlerts=useMemo(()=>{
     let count=alerts.filter((a:any)=>!a.read).length
     blocks.forEach((b:Block)=>{
@@ -830,13 +864,13 @@ export default function VCGApp() {
       {/* CONTENT */}
       <div style={{position:'relative',zIndex:1,padding:'0 12px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%',animation:'pageEnter 0.4s ease',boxSizing:'border-box'}} key={screen}>
         {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onAddCommunity2={(b:Block)=>addBlock(b)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} weatherData={weatherData} onDeleteBlock={deleteBlock} />}
-        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} allDevices={devices} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>setDevices(p=>p.filter(d=>d.sfdi!==sfdi))} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
+        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} allDevices={devices} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>{const nd=devices.filter(d=>d.sfdi!==sfdi);setDevices(nd);saveAllToCloud(blocks,nd,sensors)}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
 
         {screen==='alerts'    && <AlertsScreen    T={T} blocks={blocks} sensors={sensors} alerts={alerts} onMarkRead={(id:string)=>setAlerts(p=>p.map(a=>a.id===id?{...a,read:true}:a))} onMarkAll={()=>setAlerts(p=>p.map(a=>({...a,read:true})))} cardStyle={cardStyle} pill={pill} />}
         {screen==='demand'    && <DemandScreen    T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} pill={pill} goldBtn={goldBtn} />}
         {screen==='history'   && <HistoryScreen   T={T} history={history} blocks={blocks} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='cost'      && <CostScreen      T={T} blocks={blocks} sensors={sensors} cardStyle={cardStyle} />}
-        {screen==='devices'   && <DevicesScreen   T={T} devices={devices} blocks={blocks} activeDevice={activeDevice} onDelete={(s:string)=>setDevices(p=>p.filter(d=>d.sfdi!==s))} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
+        {screen==='devices'   && <DevicesScreen   T={T} devices={devices} blocks={blocks} activeDevice={activeDevice} onDelete={(s:string)=>{const nd=devices.filter(d=>d.sfdi!==s);setDevices(nd);saveAllToCloud(blocks,nd,sensors)}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='map'       && <MapScreen       T={T} blocks={blocks} cardStyle={cardStyle} pill={pill} />}
         {screen==='compare'   && <CompareScreen   T={T} blocks={blocks} sensors={sensors} cardStyle={cardStyle} />}
         {screen==='register'  && <RegisterScreen  T={T} blocks={blocks} activeBlock={activeBlock} onBack={()=>setScreen(activeBlock?'block':'home')} apiOnline={apiOnline} onDeviceAdded={addDevice} cardStyle={cardStyle} ironBtn={ironBtn} lbl={lbl} inp={inp} />}
@@ -854,9 +888,11 @@ export default function VCGApp() {
   setTimeout(()=>saveAllToCloud(blocks,[...devices,...d],{...sensors,[b.id]:s}),500)
   setScreen('home')
   addNotification({title:'✅ Group 12 Imported',message:`${b.name} — ${d.length} devices, ${s.length} sensors`,type:'success'})
+  showSuccess(`${b.name} imported — ${d.length} devices!`)
 }} cardStyle={cardStyle} ironBtn={ironBtn} />}
 
         {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} darkMode={darkMode} />}
+        {screen==='methodology' && <MethodologyScreen T={T} blocks={blocks} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='fiware'    && <FIWAREScreen    T={T} blocks={blocks} sensors={sensors} apiOnline={apiOnline} isOffline={isOffline} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='settings'  && <SettingsScreen  T={T} apiOnline={apiOnline} apiMsg={apiMsg} onRefresh={()=>{checkApi();checkEndpoints()}} onSyncAll={async()=>{
@@ -888,6 +924,24 @@ export default function VCGApp() {
       {/* BOTTOM NAV */}
       <div style={{position:'fixed',bottom:0,left:0,right:0,background:darkMode?'rgba(22,27,34,0.97)':'rgba(255,255,255,0.97)',borderTop:`2px solid ${T.red}30`,zIndex:50,boxShadow:'0 -4px 24px rgba(230,57,70,0.15)',backdropFilter:'blur(16px)',padding:'8px 0 18px'}}>
         <div style={{display:'flex',justifyContent:'space-around',maxWidth:900,margin:'0 auto'}}>
+          {/* Success Toast */}
+          {successToast&&(
+            <div style={{
+              position:'fixed',top:72,left:'50%',
+              transform:'translateX(-50%)',
+              background:'linear-gradient(135deg,#10b981,#059669)',
+              color:'#fff',padding:'10px 22px',borderRadius:50,
+              fontWeight:800,fontSize:13,zIndex:9999,
+              boxShadow:'0 4px 20px rgba(16,185,129,0.5)',
+              animation:'successPop 0.4s ease-out',
+              display:'flex',alignItems:'center',gap:8,
+              whiteSpace:'nowrap',pointerEvents:'none'
+            }}>
+              <span style={{fontSize:18}}>✅</span>
+              {successToast}
+            </div>
+          )}
+
           {NAV.map(t=>(
             <button key={t.id} onClick={()=>{setActiveBlock(null);setScreen(t.id as Screen)}} style={{background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:2,padding:'0 8px',position:'relative'}}>
               <div style={{width:42,height:42,borderRadius:14,background:screen===t.id?'linear-gradient(135deg,#c1121f,#e63946)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,transition:'all 0.2s',boxShadow:screen===t.id?'0 4px 12px rgba(230,57,70,0.5)':undefined}}>
@@ -1349,6 +1403,67 @@ function HomeScreen({T,blocks,onBlockClick,apiOnline,apiMsg,alerts,isOffline,onA
           <button onClick={onAddCommunity} style={ironBtn({width:'auto',padding:'12px 28px',fontSize:14})}>📥 Import Data</button>
         </div>
       )}
+      {blocks.length>0&&(()=>{
+        const totalGen=blocks.reduce((s:number,b:Block)=>s+b.generation,0)
+        const totalCon=blocks.reduce((s:number,b:Block)=>s+b.consumption,0)
+        const totalNet=+(totalGen-totalCon).toFixed(1)
+        const surplus=blocks.filter((b:Block)=>b.net>0).length
+        const deficit=blocks.filter((b:Block)=>b.net<0).length
+        const co2Saved=+(totalGen*IRISH_GRID_CARBON).toFixed(1)
+        const hourlySaving=+(totalGen*IRISH_ELECTRICITY_RATE).toFixed(2)
+        return (
+          <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#1a1a2e)',border:'none'}),marginBottom:4}}>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',letterSpacing:2,marginBottom:12}}>⚡ GRID SUMMARY · {blocks.length} COMMUNITIES</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:12}}>
+              {[
+                {l:'Generation',v:totalGen.toFixed(1),u:'kW',c:'#10b981'},
+                {l:'Consumption',v:totalCon.toFixed(1),u:'kW',c:'#f59e0b'},
+                {l:'Net Balance',v:(totalNet>=0?'+':'')+totalNet,u:'kW',c:totalNet>=0?'#10b981':'#e63946'},
+              ].map(s=>(
+                <div key={s.l} style={{textAlign:'center',padding:'8px 4px',background:'rgba(255,255,255,0.04)',borderRadius:10}}>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,fontWeight:900,color:s.c}}>{s.v}</div>
+                  <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',marginTop:2}}>{s.l} {s.u}</div>
+                </div>
+              ))}
+            </div>
+            {/* Gen vs Con visual bar */}
+            <div style={{marginBottom:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:'rgba(255,255,255,0.4)',marginBottom:4}}>
+                <span>Generation</span><span>Consumption</span>
+              </div>
+              <div style={{height:8,background:'rgba(255,255,255,0.08)',borderRadius:4,overflow:'hidden',display:'flex'}}>
+                {(()=>{
+                  const total=totalGen+totalCon
+                  const genPct=total>0?(totalGen/total*100):50
+                  return(<>
+                    <div style={{width:genPct+'%',background:'linear-gradient(90deg,#10b981,#34d399)',borderRadius:'4px 0 0 4px',transition:'width 0.8s ease'}}/>
+                    <div style={{flex:1,background:'linear-gradient(90deg,#f59e0b,#fbbf24)',borderRadius:'0 4px 4px 0'}}/>
+                  </>)
+                })()}
+              </div>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <div style={{flex:1,padding:'6px 10px',background:'rgba(16,185,129,0.1)',borderRadius:8,border:'1px solid rgba(16,185,129,0.2)'}}>
+                <div style={{fontSize:9,color:'rgba(255,255,255,0.4)'}}>SURPLUS</div>
+                <div style={{fontWeight:800,color:'#10b981',fontSize:14}}>{surplus} blocks</div>
+              </div>
+              <div style={{flex:1,padding:'6px 10px',background:'rgba(230,57,70,0.1)',borderRadius:8,border:'1px solid rgba(230,57,70,0.2)'}}>
+                <div style={{fontSize:9,color:'rgba(255,255,255,0.4)'}}>DEFICIT</div>
+                <div style={{fontWeight:800,color:'#e63946',fontSize:14}}>{deficit} blocks</div>
+              </div>
+              <div style={{flex:1,padding:'6px 10px',background:'rgba(16,185,129,0.1)',borderRadius:8,border:'1px solid rgba(16,185,129,0.2)'}}>
+                <div style={{fontSize:9,color:'rgba(255,255,255,0.4)'}}>CO₂ SAVED</div>
+                <div style={{fontWeight:800,color:'#10b981',fontSize:14}}>{co2Saved}kg</div>
+              </div>
+              <div style={{flex:1,padding:'6px 10px',background:'rgba(255,214,10,0.1)',borderRadius:8,border:'1px solid rgba(255,214,10,0.2)'}}>
+                <div style={{fontSize:9,color:'rgba(255,255,255,0.4)'}}>€/HOUR</div>
+                <div style={{fontWeight:800,color:'#ffd60a',fontSize:14}}>€{hourlySaving}</div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {blocks.map((b:Block,i:number)=>(
         <div key={b.id} onClick={()=>onBlockClick(b)} style={{...cardStyle(),cursor:'pointer',transition:'all 0.2s',borderLeft:`4px solid ${b.color}`}}
           onMouseOver={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow=`0 8px 28px ${b.color}25`}}
@@ -1498,6 +1613,122 @@ function ChartsScreen({T,blocks,history,sensors,cardStyle,darkMode}:any) {
     </div>
   )
 }
+// ── METHODOLOGY SCREEN ────────────────────────────────────────────────────────
+function MethodologyScreen({T,blocks,cardStyle,pill,ironBtn}:any) {
+  const exampleConsumption=100 // kW
+  const exampleHours=1
+  const exampleCost=exampleConsumption*IRISH_ELECTRICITY_RATE*exampleHours
+  const exampleCO2=exampleConsumption*IRISH_GRID_CARBON
+  const exampleDR=50 // kW reduction
+  const exampleDuration=60 // minutes
+  const exampleDRSave=exampleDR*(exampleDuration/60)*IRISH_ELECTRICITY_RATE
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#1a0520)',border:'none'})}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#8b5cf6'}}>📐 Methodology</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>
+          All calculations use real Irish energy data · citations below
+        </div>
+      </div>
+
+      {/* Constants with sources */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:12}}>🔑 Constants</div>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <div style={{padding:12,background:T.bg,borderRadius:10,border:'1px solid '+T.border}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <div style={{fontWeight:700,fontSize:13,color:T.text}}>Electricity Rate</div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:18,fontWeight:900,color:'#ffd60a'}}>€0.38/kWh</div>
+            </div>
+            <div style={{fontSize:11,color:T.text3,fontStyle:'italic'}}>Source: Commission for Regulation of Utilities (CRU) Ireland · Price Review 6 · 2025 · cru.ie</div>
+          </div>
+          <div style={{padding:12,background:T.bg,borderRadius:10,border:'1px solid '+T.border}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <div style={{fontWeight:700,fontSize:13,color:T.text}}>Grid Carbon Intensity</div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:18,fontWeight:900,color:'#10b981'}}>0.296 kg/kWh</div>
+            </div>
+            <div style={{fontSize:11,color:T.text3,fontStyle:'italic'}}>Source: SEAI Energy in Ireland 2024 Report · seai.ie</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Formulas */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:12}}>📏 Formulas Used</div>
+
+        {/* Formula 1 - Cost */}
+        <div style={{marginBottom:14,padding:12,background:T.bg,borderRadius:10,border:'1px solid '+T.border}}>
+          <div style={{fontWeight:700,fontSize:13,color:'#e63946',marginBottom:6}}>1. Energy Cost</div>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:T.text2,marginBottom:8,padding:8,background:'rgba(230,57,70,0.08)',borderRadius:6}}>
+            Cost (€) = Power (kW) × Rate (€/kWh) × Time (h)
+          </div>
+          <div style={{fontSize:11,color:T.text3}}>
+            <strong>Example:</strong> {exampleConsumption} kW × €0.38 × {exampleHours} h = <strong style={{color:'#e63946'}}>€{exampleCost.toFixed(2)}</strong>
+          </div>
+        </div>
+
+        {/* Formula 2 - Savings */}
+        <div style={{marginBottom:14,padding:12,background:T.bg,borderRadius:10,border:'1px solid '+T.border}}>
+          <div style={{fontWeight:700,fontSize:13,color:'#10b981',marginBottom:6}}>2. Solar Savings</div>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:T.text2,marginBottom:8,padding:8,background:'rgba(16,185,129,0.08)',borderRadius:6}}>
+            Savings (€) = Generation (kW) × Rate (€/kWh) × Time (h)
+          </div>
+          <div style={{fontSize:11,color:T.text3}}>
+            <strong>Logic:</strong> Every kWh generated locally = 1 kWh not bought from grid
+          </div>
+        </div>
+
+        {/* Formula 3 - CO2 */}
+        <div style={{marginBottom:14,padding:12,background:T.bg,borderRadius:10,border:'1px solid '+T.border}}>
+          <div style={{fontWeight:700,fontSize:13,color:'#ffd60a',marginBottom:6}}>3. CO₂ Avoided</div>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:T.text2,marginBottom:8,padding:8,background:'rgba(255,214,10,0.08)',borderRadius:6}}>
+            CO₂ (kg) = Energy (kWh) × Carbon Intensity (kg/kWh)
+          </div>
+          <div style={{fontSize:11,color:T.text3}}>
+            <strong>Example:</strong> {exampleConsumption} kWh × 0.296 = <strong style={{color:'#ffd60a'}}>{exampleCO2.toFixed(2)} kg CO₂</strong> saved
+          </div>
+        </div>
+
+        {/* Formula 4 - DR */}
+        <div style={{padding:12,background:T.bg,borderRadius:10,border:'1px solid '+T.border}}>
+          <div style={{fontWeight:700,fontSize:13,color:'#58c4dc',marginBottom:6}}>4. Demand Response Savings</div>
+          <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:T.text2,marginBottom:8,padding:8,background:'rgba(88,196,220,0.08)',borderRadius:6}}>
+            Savings (€) = Reduction (kW) × Duration (h) × Rate (€/kWh)
+          </div>
+          <div style={{fontSize:11,color:T.text3}}>
+            <strong>Example:</strong> {exampleDR} kW × {exampleDuration/60} h × €0.38 = <strong style={{color:'#58c4dc'}}>€{exampleDRSave.toFixed(2)}</strong> saved
+          </div>
+        </div>
+      </div>
+
+      {/* Real vs Simulated disclosure */}
+      <div style={{...cardStyle({background:'rgba(139,92,246,0.05)',border:'1px solid rgba(139,92,246,0.3)'})}}>
+        <div style={{fontWeight:800,fontSize:14,color:'#8b5cf6',marginBottom:10}}>📋 Data Transparency</div>
+        <div style={{fontSize:12,color:T.text2,lineHeight:1.6}}>
+          <div style={{marginBottom:8}}>
+            <strong style={{color:'#10b981'}}>✓ Real data:</strong> Group 12 SmartMeter readings (134,087 kWh) from NGSI-LD CSV, Irish electricity rate, Irish grid carbon intensity.
+          </div>
+          <div>
+            <strong style={{color:'#f59e0b'}}>⚠ Simulated:</strong> Individual block kW values are simulated until connected to real IEEE 2030.5 compliant smart meters. The <strong>formulas are identical</strong> — only the input values will differ with real hardware.
+          </div>
+        </div>
+      </div>
+
+      {/* References */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:10}}>📚 References</div>
+        <div style={{display:'flex',flexDirection:'column',gap:8,fontSize:11,color:T.text2}}>
+          <div><strong>[1]</strong> Commission for Regulation of Utilities (CRU), Ireland · <em>Price Review 6, 2025</em> · cru.ie</div>
+          <div><strong>[2]</strong> Sustainable Energy Authority of Ireland (SEAI) · <em>Energy in Ireland 2024 Report</em> · seai.ie</div>
+          <div><strong>[3]</strong> IEEE 2030.5-2018 · <em>Smart Energy Profile 2.0</em> · standards.ieee.org/ieee/2030.5/5897</div>
+          <div><strong>[4]</strong> ETSI SAREF Ontology TS 103 264 · <em>Smart Appliances REFerence</em> · saref.etsi.org</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── BLOCK DETAIL ──────────────────────────────────────────────────────────────
 function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,history,onBack,onRegister,onDeviceClick,onDeviceDelete,onDeleteBlock,darkMode,cardStyle,pill,ironBtn}:any) {
   const live=blocks.find((x:Block)=>x.id===b.id)||b
@@ -1532,6 +1763,9 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
             0%,100%{box-shadow:0 0 16px rgba(88,196,220,0.9),0 0 32px rgba(88,196,220,0.4)}
             50%{box-shadow:0 0 32px rgba(88,196,220,1),0 0 64px rgba(88,196,220,0.5)}
           }
+          @keyframes successPop{0%{transform:translateX(-50%) scale(0.5);opacity:0}60%{transform:translateX(-50%) scale(1.1)}100%{transform:translateX(-50%) scale(1);opacity:1}}
+          @keyframes fadeInUp{0%{transform:translateY(20px);opacity:0}100%{transform:translateY(0);opacity:1}}
+          @keyframes pulse2{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
         `}</style>
 
         {/* Header */}
@@ -1559,9 +1793,15 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
                 </radialGradient>
               </defs>
 
-              {/* Orbit ring - anti-clockwise */}
+              {/* Status glow behind everything */}
+              <circle cx={160} cy={160} r={130} fill="none"
+                stroke={live.status==='Surplus'?'rgba(16,185,129,0.12)':live.status==='Deficit'?'rgba(230,57,70,0.12)':'rgba(255,214,10,0.08)'}
+                strokeWidth={18}/>
+
+              {/* Orbit ring - status colored */}
               <circle cx={160} cy={160} r={108} fill="none"
-                stroke="rgba(255,214,10,0.12)" strokeWidth={1}
+                stroke={live.status==='Surplus'?'rgba(16,185,129,0.35)':live.status==='Deficit'?'rgba(230,57,70,0.35)':'rgba(255,214,10,0.25)'}
+                strokeWidth={1.5}
                 strokeDasharray="4,8"
                 style={{animation:'arcR2 18s linear infinite',
                   transformOrigin:'160px 160px'}}/>
@@ -1665,9 +1905,13 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
 
               {/* Reactor core rings */}
               <circle cx={160} cy={160} r={58}
-                fill="none" stroke="rgba(255,214,10,0.2)" strokeWidth={6}/>
+                fill="none"
+                stroke={live.status==='Surplus'?'rgba(16,185,129,0.4)':live.status==='Deficit'?'rgba(230,57,70,0.4)':'rgba(255,214,10,0.3)'}
+                strokeWidth={6}/>
               <circle cx={160} cy={160} r={55}
-                fill="#0a0c10" stroke="#ffd60a" strokeWidth={2}/>
+                fill="#0a0c10"
+                stroke={live.status==='Surplus'?'#10b981':live.status==='Deficit'?'#e63946':'#ffd60a'}
+                strokeWidth={2}/>
               <circle cx={160} cy={160} r={47}
                 fill="none" stroke="#e63946" strokeWidth={1.5}
                 strokeDasharray="7,4"
@@ -2297,12 +2541,30 @@ function DemandScreen({T,blocks,apiOnline,cardStyle,pill,goldBtn}:any) {
   const [drType,setDrType]=useState('Load Reduction')
   const [selBlock,setSelBlock]=useState('ALL')
   const [events,setEvents]=useState<any[]>([])
+  const [activeTimer,setActiveTimer]=useState<{event:string,remaining:number,total:number}|null>(null)
+
+  const startDRTimer=(eventName:string,durationMinutes:number)=>{
+    const totalSecs=durationMinutes*60
+    setActiveTimer({event:eventName,remaining:totalSecs,total:totalSecs})
+    const iv=setInterval(()=>{
+      setActiveTimer(prev=>{
+        if(!prev||prev.remaining<=1){clearInterval(iv);return null}
+        return{...prev,remaining:prev.remaining-1}
+      })
+    },1000)
+  }
+
+  const formatTime=(secs:number)=>{
+    const m=Math.floor(secs/60)
+    const s=secs%60
+    return `${m}:${s.toString().padStart(2,'0')}`
+  }
 
   // Calculate DR impact dynamically based on ALL blocks
   const targetBlocks=selBlock==='ALL'?blocks:[blocks.find((b:Block)=>b.id===selBlock)].filter(Boolean)
   const totalCon=targetBlocks.reduce((s:number,b:any)=>s+b.consumption,0)
   const reduction=+(totalCon*(targetPct/100)).toFixed(1)
-  const saving=+(reduction*0.38/1000*duration*60).toFixed(2)
+  const saving=calcDRSaving(reduction,duration)
 
   const triggerDR=async()=>{
     const ids=targetBlocks.map((b:any)=>b.id)
@@ -2323,10 +2585,46 @@ function DemandScreen({T,blocks,apiOnline,cardStyle,pill,goldBtn}:any) {
       })
     }catch{}
     setTimeout(()=>setTriggered(p=>p.filter(id=>!ids.includes(id))),duration*60000)
+    startDRTimer(drType,duration)
   }
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
+
+      {/* Active DR Timer */}
+      {activeTimer&&(
+        <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#1a0020)',border:'2px solid rgba(230,57,70,0.5)'})}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:12,color:'#e63946',letterSpacing:2}}>🔴 DR EVENT ACTIVE</div>
+              <div style={{fontSize:12,color:'rgba(255,255,255,0.6)',marginTop:2}}>{activeTimer.event}</div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:32,fontWeight:900,color:'#ffd60a'}}>{formatTime(activeTimer.remaining)}</div>
+              <div style={{fontSize:10,color:'rgba(255,255,255,0.4)'}}>remaining</div>
+            </div>
+          </div>
+          <div style={{height:6,background:'rgba(255,255,255,0.08)',borderRadius:3,overflow:'hidden'}}>
+            <div style={{height:'100%',width:((activeTimer.remaining/activeTimer.total)*100)+'%',background:'linear-gradient(90deg,#e63946,#ffd60a)',borderRadius:3,transition:'width 1s linear'}}/>
+          </div>
+          <div style={{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:6,textAlign:'center'}}>
+            {Math.floor((1-activeTimer.remaining/activeTimer.total)*100)}% complete
+          </div>
+          <div style={{height:6,background:'rgba(255,255,255,0.08)',borderRadius:3,overflow:'hidden'}}>
+            <div style={{
+              height:'100%',
+              width:((activeTimer.remaining/activeTimer.total)*100)+'%',
+              background:'linear-gradient(90deg,#e63946,#ffd60a)',
+              borderRadius:3,
+              transition:'width 1s linear'
+            }}/>
+          </div>
+          <div style={{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:6,textAlign:'center'}}>
+            {Math.floor((1-activeTimer.remaining/activeTimer.total)*100)}% complete
+          </div>
+        </div>
+      )}
+
       <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#1a0520)',border:'none'})}}>
         <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#ffd60a'}}>⚡ Demand Response</div>
         <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>IEEE 2030.5 DR Control — {blocks.length} communities</div>
@@ -2489,15 +2787,17 @@ function HistoryScreen({T,history,blocks,cardStyle,ironBtn}:any) {
 
 // ── COST ──────────────────────────────────────────────────────────────────────
 function CostScreen({T,blocks,sensors,cardStyle}:any) {
-  const rate=0.38
-  const totalCost=blocks.reduce((s:number,b:Block)=>s+parseFloat((b.consumption*rate/1000*3600).toFixed(2)),0)
-  const totalSave=blocks.reduce((s:number,b:Block)=>s+parseFloat((b.generation*rate/1000*3600).toFixed(2)),0)
-  const totalCO2=Object.values(sensors).flat().filter((s:any)=>s.label==='CO₂ Saved').reduce((t:number,s:any)=>t+s.value,0)
+  const rate=IRISH_ELECTRICITY_RATE
+  // Hourly cost = kW × €/kWh (in one hour, kW × 1h = kWh, so cost = kW × €/kWh × 1h)
+  const totalCost=blocks.reduce((s:number,b:Block)=>s+calcCost(b.consumption),0)
+  const totalSave=blocks.reduce((s:number,b:Block)=>s+calcCost(b.generation),0)
+  // CO₂ saved by solar generation (vs taking from grid)
+  const totalCO2=blocks.reduce((s:number,b:Block)=>s+calcCO2Saved(b.generation),0)
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
       <div style={cardStyle({background:'linear-gradient(135deg,#0d1117,#161b22)',border:'none'})}><div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#ffd60a'}}>💰 Cost & Savings</div></div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-        {[{icon:'💸',l:'Daily Cost',v:`€${totalCost.toFixed(2)}`,c:T.red,bg:T.redLight},{icon:'💚',l:'Solar Savings',v:`€${totalSave.toFixed(2)}`,c:T.green,bg:T.greenL},{icon:'🌿',l:'CO₂ Saved',v:`${(+totalCO2).toFixed(1)}kg`,c:T.arc,bg:T.arcLight},{icon:'📊',l:'Rate/kWh',v:`€${rate}`,c:T.amber,bg:T.amberL}].map(s=>(
+        {[{icon:'💸',l:'Hourly Cost',v:`€${totalCost.toFixed(2)}`,c:T.red,bg:T.redLight,sub:'per hour'},{icon:'💚',l:'Hourly Savings',v:`€${totalSave.toFixed(2)}`,c:T.green,bg:T.greenL,sub:'per hour'},{icon:'🌿',l:'CO₂ Saved',v:`${totalCO2.toFixed(2)} kg`,c:T.arc,bg:T.arcLight,sub:'per hour'},{icon:'📊',l:'Rate',v:`€${rate}/kWh`,c:T.amber,bg:T.amberL,sub:'CRU Ireland'}].map(s=>(
           <div key={s.l} style={{background:s.bg,borderRadius:18,padding:'18px 16px',border:`1px solid ${s.c}20`}}>
             <div style={{fontSize:28,marginBottom:8}}>{s.icon}</div>
             <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:900,color:s.c}}>{s.v}</div>
@@ -2505,9 +2805,9 @@ function CostScreen({T,blocks,sensors,cardStyle}:any) {
           </div>
         ))}
       </div>
-      <div style={cardStyle()}><div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:14}}>Cost Distribution</div><DonutChart segments={blocks.map((b:Block)=>({label:b.name,value:parseFloat((b.consumption*rate/1000*3600).toFixed(2)),color:b.color}))} size={160} T={T}/></div>
+      <div style={cardStyle()}><div style={{fontWeight:800,fontSize:14,color:T.text,marginBottom:14}}>Cost Distribution</div><DonutChart segments={blocks.map((b:Block)=>({label:b.name,value:calcCost(b.consumption),color:b.color}))} size={160} T={T}/></div>
       <SH T={T} title="Per Block" />
-      {blocks.map((b:Block)=>{const cost=+(b.consumption*rate/1000*3600).toFixed(3);const save=+(b.generation*rate/1000*3600).toFixed(3);const net=+(save-cost).toFixed(3);return(
+      {blocks.map((b:Block)=>{const cost=calcCost(b.consumption);const save=calcCost(b.generation);const net=+(save-cost).toFixed(2);return(
         <div key={b.id} style={cardStyle()}>
           <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}><div style={{width:40,height:40,borderRadius:12,background:b.color+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>{b.emoji}</div><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14,color:T.text}}>{b.name}</div></div><div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:16,color:net>=0?T.green:T.red}}>{net>=0?'+€':'−€'}{Math.abs(net).toFixed(3)}</div></div>
           <HBarChart data={[{label:'Cost',value:cost,max:cost+save,color:T.red},{label:'Savings',value:save,max:cost+save,color:T.green}]} T={T}/>
@@ -3235,6 +3535,7 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStar
 
   const MORE=[
     {icon:'🏗️',label:'Architecture', s:'architecture',c:'#ffd60a'},
+    {icon:'📐',label:'Methodology',  s:'methodology', c:'#8b5cf6'},
     {icon:'📄',label:'PDF Report',   s:'report',      c:'#e63946'},
     {icon:'🎬',label:'Demo Mode',    s:'demo',        c:'#ffd60a'},
     {icon:'📥',label:'Import Data',  s:'group12',     c:'#ec4899'},
