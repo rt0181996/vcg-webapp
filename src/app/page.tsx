@@ -583,7 +583,7 @@ export default function VCGApp() {
       try{
         // Skip sync if we made a local change in the last 15 seconds
         // This prevents the poller from restoring deleted data
-        if(Date.now()-lastLocalChange.current < 15000) return
+        if(Date.now()-lastLocalChange.current < 30000) return
 
         const data=await loadFromJSONBin()
         if(!data) return
@@ -591,7 +591,7 @@ export default function VCGApp() {
         // Only sync if cloud data is newer than our last local change
         if(data.updated_at){
           const cloudTime=new Date(data.updated_at).getTime()
-          if(cloudTime < lastLocalChange.current) return
+          if(cloudTime <= lastLocalChange.current+1000) return
         }
 
         // Sync blocks from other devices (filter demo blocks)
@@ -675,19 +675,42 @@ export default function VCGApp() {
     addNotification({title:'Device Registered',message:`${d.sfdi} added to ${d.block}`,type:'success'})
     showSuccess(`Device ${d.sfdi} registered!`)
   }
-  const deleteBlock=(id:string)=>{
+  const deleteBlock=async(id:string)=>{
     markLocalChange()
     const newBlocks=blocks.filter((b:Block)=>b.id!==id)
     const newDevices=devices.filter((d:Device)=>d.block!==id)
     const newSensors={...sensors}
     delete newSensors[id]
+    // Update local state immediately
     setBlocks(newBlocks)
     setDevices(newDevices)
     setSensors(newSensors)
-    // Delete from Render API
+    // Also clear localStorage immediately
+    try{localStorage.setItem('vcg_blocks',JSON.stringify(newBlocks))}catch{}
+    try{localStorage.setItem('vcg_devices',JSON.stringify(newDevices))}catch{}
+    // If deleting Group12 block, clear group12 localStorage too
+    if(id==='G12-BLK'||id.startsWith('G12')){
+      try{localStorage.removeItem('vcg_group12_import')}catch{}
+    }
+    // Save to JSONBin FIRST (await it) before anything else
+    const data={
+      blocks:newBlocks,
+      devices:newDevices,
+      sensors:newSensors,
+      group12:id==='G12-BLK'||id.startsWith('G12')?null:
+        (()=>{try{return JSON.parse(localStorage.getItem('vcg_group12_import')||'null')}catch{return null}})(),
+      updated_at:new Date().toISOString()
+    }
+    try{
+      await fetch(JSONBIN_URL,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json','X-Master-Key':JSONBIN_KEY},
+        body:JSON.stringify(data)
+      })
+      console.log('✅ Delete saved to JSONBin')
+    }catch(e){console.log('JSONBin save failed:',e)}
+    // Then delete from Render API
     fetch(BLOCKS_API+'/'+id,{method:'DELETE'}).catch(()=>{})
-    // Save updated (empty) state to JSONBin immediately
-    saveAllToCloud(newBlocks,newDevices,newSensors)
     addNotification({title:'Block Deleted',message:`Block ${id} removed`,type:'info'})
   }
   const goHome=()=>{setScreen('home');setActiveBlock(null);setActiveDevice(null)}
