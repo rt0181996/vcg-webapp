@@ -272,21 +272,25 @@ export default function VCGApp() {
     })
   }
 
+  // Track if we're currently applying data from cloud sync
+  // Prevents auto-save from echoing cloud data back to cloud
+  const isSyncingFromCloud=useRef(false)
+
   // ── localStorage: save blocks/devices on change ──────────────────────────
   useEffect(()=>{
     try{localStorage.setItem('vcg_blocks',JSON.stringify(blocks))}catch{}
     const customBlocks=blocks
     if(customBlocks.length>0) syncBlocksToAPI(customBlocks)
-    // Auto-save everything to cloud on any block change
-    saveAllToCloud(blocks,devices,sensors)
+    // Auto-save to cloud ONLY if change was user-initiated, not from sync
+    if(!isSyncingFromCloud.current) saveAllToCloud(blocks,devices,sensors)
   },[blocks])
   useEffect(()=>{
     try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
   },[devices])
   useEffect(()=>{
     try{localStorage.setItem('vcg_sensors',JSON.stringify(sensors))}catch{}
-    // Auto-save to cloud when sensors update
-    if(Object.keys(sensors).length>0) saveAllToCloud(blocks,devices,sensors)
+    // Auto-save to cloud ONLY if change was user-initiated
+    if(Object.keys(sensors).length>0&&!isSyncingFromCloud.current) saveAllToCloud(blocks,devices,sensors)
   },[sensors])
 
   // ── Weather API (OpenWeatherMap free) ────────────────────────────────────
@@ -468,16 +472,18 @@ export default function VCGApp() {
   // Sync devices to API when they change
   useEffect(()=>{
     try{localStorage.setItem('vcg_devices',JSON.stringify(devices))}catch{}
-    // Sync to Render API
-    if(devices.length>0){
-      fetch(API_V1+'/devices/sync',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({devices})
-      }).catch(()=>{})
+    // Sync to Render API (only if user change, not sync echo)
+    if(!isSyncingFromCloud.current){
+      if(devices.length>0){
+        fetch(API_V1+'/devices/sync',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({devices})
+        }).catch(()=>{})
+      }
+      // Auto-save everything to cloud on any device change
+      saveAllToCloud(blocks,devices,sensors)
     }
-    // Auto-save everything to cloud on any device change
-    saveAllToCloud(blocks,devices,sensors)
   },[devices])
 
   const loadDevicesFromAPI=useCallback(async()=>{
@@ -568,8 +574,7 @@ export default function VCGApp() {
     // Poll JSONBin every 10 seconds for changes from other devices
     const syncInterval=setInterval(async()=>{
       try{
-        // Skip sync if we made a local change in the last 15 seconds
-        // This prevents the poller from restoring deleted data
+        // Skip sync if we made a local change in the last 5 seconds
         if(Date.now()-lastLocalChange.current < 5000) return
 
         const data=await loadFromJSONBin()
@@ -580,6 +585,10 @@ export default function VCGApp() {
           const cloudTime=new Date(data.updated_at).getTime()
           if(cloudTime <= lastLocalChange.current+1000) return
         }
+
+        // Set flag BEFORE applying cloud data to prevent auto-save echo
+        isSyncingFromCloud.current=true
+        setTimeout(()=>{isSyncingFromCloud.current=false},5000)
 
         // Sync blocks from other devices (filter demo blocks)
         if(data.blocks?.length){
