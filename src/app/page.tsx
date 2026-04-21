@@ -143,7 +143,7 @@ export default function VCGApp() {
   const [apiMsg,setApiMsg]=useState('')
   const [isOffline,setIsOffline]=useState(false)
   const [blocks,setBlocks]=useState<Block[]>(()=>{
-    try{const s=localStorage.getItem('vcg_blocks');return s?JSON.parse(s):INIT_BLOCKS}catch{return INIT_BLOCKS}
+    try{const s=localStorage.getItem('vcg_blocks');const parsed=s?JSON.parse(s):[];return parsed.filter((b:any)=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))}catch{return []}
   })
   const [sensors,setSensors]=useState<Record<string,Sensor[]>>(INIT_SENSORS)
   const [evs,setEvs]=useState<EV[]>(INIT_EVS)
@@ -412,14 +412,24 @@ export default function VCGApp() {
     saveToJSONBin(data)
   },[])
 
+  const DEMO_IDS=['BLK-A','BLK-B','BLK-C','BLK-D']
+
   const loadBlocksFromAPI=useCallback(async()=>{
     try{
       const r=await fetch(BLOCKS_API)
       if(r.ok){
         const d=await r.json()
-        if(d.blocks&&d.blocks.length>0){
-          setBlocks(d.blocks)
-          addNotification({title:'🔄 Synced from API',message:`${d.blocks.length} blocks loaded from server`,type:'success'})
+        // Filter out any demo/sample blocks
+        const realBlocks=(d.blocks||[]).filter((b:Block)=>!DEMO_IDS.includes(b.id))
+        if(realBlocks.length>0){
+          setBlocks((p:Block[])=>{
+            let updated=[...p.filter((b:Block)=>!DEMO_IDS.includes(b.id))]
+            realBlocks.forEach((b:Block)=>{
+              if(!updated.find((x:Block)=>x.id===b.id)) updated=[...updated,b]
+              else updated=updated.map((x:Block)=>x.id===b.id?b:x)
+            })
+            return updated
+          })
         }
       }
     }catch(e){console.log('Load from API failed:',e)}
@@ -490,6 +500,12 @@ export default function VCGApp() {
 
   // Load from localStorage first (instant), then JSONBin (permanent), then API
   useEffect(()=>{
+    // 0. Nuke demo blocks from Render API silently
+    fetch(BLOCKS_API+'/BLK-A',{method:'DELETE'}).catch(()=>{})
+    fetch(BLOCKS_API+'/BLK-B',{method:'DELETE'}).catch(()=>{})
+    fetch(BLOCKS_API+'/BLK-C',{method:'DELETE'}).catch(()=>{})
+    fetch(BLOCKS_API+'/BLK-D',{method:'DELETE'}).catch(()=>{})
+
     // 1. Load from localStorage immediately (same browser)
     try{
       const saved=localStorage.getItem('vcg_group12_import')
@@ -507,21 +523,24 @@ export default function VCGApp() {
     loadFromJSONBin().then((data:any)=>{
       if(!data) return
       try{
-        // Restore blocks + init history for charts
+        // Restore blocks + init history (filter out any demo blocks)
         if(data.blocks?.length){
-          setBlocks((p:Block[])=>{
-            let updated=[...p]
-            data.blocks.forEach((b:Block)=>{
-              if(!updated.find(x=>x.id===b.id)) updated=[...updated,b]
-              else updated=updated.map(x=>x.id===b.id?b:x)
+          const realBlocks=data.blocks.filter((b:Block)=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))
+          if(realBlocks.length>0){
+            setBlocks((p:Block[])=>{
+              let updated=[...p.filter((b:Block)=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))]
+              realBlocks.forEach((b:Block)=>{
+                if(!updated.find(x=>x.id===b.id)) updated=[...updated,b]
+                else updated=updated.map(x=>x.id===b.id?b:x)
+              })
+              return updated
             })
-            return updated
-          })
-          setHistory((p:any)=>{
-            const n={...p}
-            data.blocks.forEach((b:Block)=>{if(!n[b.id]) n[b.id]=makeHistory(b.id)})
-            return n
-          })
+            setHistory((p:any)=>{
+              const n={...p}
+              realBlocks.forEach((b:Block)=>{if(!n[b.id]) n[b.id]=makeHistory(b.id)})
+              return n
+            })
+          }
         }
         // Restore devices
         if(data.devices?.length){
@@ -558,11 +577,12 @@ export default function VCGApp() {
         const data=await loadFromJSONBin()
         if(!data) return
 
-        // Sync blocks from other devices
+        // Sync blocks from other devices (filter demo blocks)
         if(data.blocks?.length){
+          const realBlocks=data.blocks.filter((b:Block)=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))
           setBlocks((prev:Block[])=>{
-            let updated=[...prev]
-            data.blocks.forEach((b:Block)=>{
+            let updated=[...prev.filter((b:Block)=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))]
+            realBlocks.forEach((b:Block)=>{
               const idx=updated.findIndex(x=>x.id===b.id)
               if(idx===-1){updated=[...updated,b]}
               else if(JSON.stringify(updated[idx])!==JSON.stringify(b)){
@@ -571,10 +591,9 @@ export default function VCGApp() {
             })
             return updated
           })
-          // Init history for synced blocks so charts work
           setHistory((p:any)=>{
             const n={...p}
-            data.blocks.forEach((b:Block)=>{if(!n[b.id]) n[b.id]=makeHistory(b.id)})
+            realBlocks.forEach((b:Block)=>{if(!n[b.id]) n[b.id]=makeHistory(b.id)})
             return n
           })
         }
