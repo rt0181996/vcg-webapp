@@ -2885,46 +2885,145 @@ function CostScreen({T,blocks,sensors,cardStyle}:any) {
 // ── DEVICES ───────────────────────────────────────────────────────────────────
 function DevicesScreen({T,devices,blocks,activeDevice,onDelete,cardStyle,pill,ironBtn}:any) {
   const [sel,setSel]=useState<Device|null>(activeDevice)
+  const [openBlocks,setOpenBlocks]=useState<Record<string,boolean>>({})
+
+  const toggleBlock=(id:string)=>setOpenBlocks(p=>({...p,[id]:!p[id]}))
+
+  const icons:Record<string,string>={
+    'Smart Meter':'⚡','Solar Inverter':'☀️','EV Charger':'🚗',
+    'Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️',
+    'Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋',
+    'HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️',
+    'MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧',
+    'PressureSensor':'🌀','SmartMeter':'⚡',
+  }
+
   if(sel) return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div style={cardStyle()}><button onClick={()=>setSel(null)} style={{background:T.bg,border:'none',borderRadius:10,padding:'7px 14px',fontSize:12,fontWeight:700,color:T.text2,cursor:'pointer',marginBottom:14}}>← Back</button><div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:T.text}}>📟 Device Detail</div></div>
+      <div style={cardStyle()}>
+        <button onClick={()=>setSel(null)} style={{background:T.bg,border:'none',borderRadius:10,padding:'7px 14px',fontSize:12,fontWeight:700,color:T.text2,cursor:'pointer',marginBottom:14}}>← Back</button>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:T.text}}>📟 Device Detail</div>
+      </div>
       <div style={cardStyle({border:`2px solid ${sel.status==='Online'?T.green:T.amber}`})}>
-        <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:18}}><div style={{width:56,height:56,borderRadius:18,background:T.arcLight,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28}}>📟</div><div><div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:16,color:T.arc}}>{sel.sfdi}</div><div style={{fontSize:13,color:T.text2}}>{sel.type}</div><div style={pill(sel.status==='Online'?T.green:T.amber)}>{sel.status}</div></div></div>
+        <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:18}}>
+          <div style={{width:56,height:56,borderRadius:18,background:T.arcLight,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28}}>{icons[sel.type]||'📟'}</div>
+          <div>
+            <div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:16,color:T.arc}}>{sel.sfdi}</div>
+            <div style={{fontSize:13,color:T.text2}}>{sel.type}</div>
+            <div style={pill(sel.status==='Online'?T.green:T.amber)}>{sel.status}</div>
+          </div>
+        </div>
         {[{l:'LFDI',v:sel.lfdi||'—'},{l:'Type',v:sel.type},{l:'Block',v:blocks.find((b:Block)=>b.id===sel.block)?.name||sel.block},{l:'Power',v:sel.power?sel.power+'W':'—'},{l:'Voltage',v:sel.voltage?sel.voltage+'V':'—'},{l:'Last Seen',v:sel.lastSeen||'—'}].map(r=>(
-          <div key={r.l} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:`1px solid ${T.border}`}}><span style={{fontSize:12,color:T.text2,fontWeight:600}}>{r.l}</span><span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:T.text,fontWeight:700,maxWidth:'55%',textAlign:'right'}}>{r.v}</span></div>
+          <div key={r.l} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:`1px solid ${T.border}`}}>
+            <span style={{fontSize:12,color:T.text2,fontWeight:600}}>{r.l}</span>
+            <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:12,color:T.text,fontWeight:700,maxWidth:'55%',textAlign:'right'}}>{r.v}</span>
+          </div>
         ))}
         <button onClick={()=>{if(window.confirm('Delete device '+sel.sfdi+'?')){onDelete(sel.sfdi);setSel(null)}}} style={{...ironBtn(),marginTop:16,background:T.redLight,color:T.red,boxShadow:'none',border:`1px solid ${T.red}30`}}>🗑️ Delete Device</button>
       </div>
     </div>
   )
+
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#161b22)',border:'none'}),display:'flex',justifyContent:'space-between',alignItems:'center'}}><div><div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:T.arc}}>📟 Devices</div><div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>{devices.length} total · {devices.filter((d:Device)=>d.status==='Online').length} online</div></div></div>
-      {blocks.map((b:Block)=>{const bd=devices.filter((d:Device)=>d.block===b.id);if(!bd.length) return null;return(
-        <div key={b.id}><div style={{fontWeight:700,fontSize:12,color:T.text2,padding:'4px 4px 8px',display:'flex',alignItems:'center',gap:6}}><span>{b.emoji}</span>{b.name} — {b.location}</div>
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>{bd.map((d:Device,i:number)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',background:T.card,borderRadius:16,border:`1px solid ${T.border}`,overflow:'hidden',transition:'all 0.15s'}}>
-              <div onClick={()=>setSel(d)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',flex:1,cursor:'pointer'}}
-                onMouseOver={e=>{e.currentTarget.parentElement!.style.borderColor=T.arc+'50'}}
-                onMouseOut={e=>{e.currentTarget.parentElement!.style.borderColor=T.border}}>
-                <div style={{width:38,height:38,borderRadius:12,background:b.color+'15',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>📟</div>
-                <div style={{flex:1}}>
-                  <div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:12,color:T.arc}}>{d.sfdi}</div>
-                  <div style={{fontSize:11,color:T.text3}}>{d.type}{d.power?` · ${d.power}W`:''}</div>
-                </div>
-                <div style={pill(d.status==='Online'?T.green:T.amber)}>{d.status}</div>
-                <span style={{color:T.text3,marginLeft:4}}>›</span>
-              </div>
-              <button onClick={()=>{if(window.confirm('Delete '+d.sfdi+'?')) onDelete(d.sfdi)}}
-                style={{background:'rgba(230,57,70,0.1)',border:'none',borderLeft:`1px solid ${T.border}`,
-                  padding:'0 16px',alignSelf:'stretch',cursor:'pointer',color:T.red,
-                  fontSize:18,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                🗑️
-              </button>
-            </div>
-          ))}</div>
+    <div style={{display:'flex',flexDirection:'column',gap:12}}>
+      {/* Header */}
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#161b22)',border:'none'})}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:T.arc}}>📟 Registered Devices</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>
+          {devices.length} total · {devices.filter((d:Device)=>d.status==='Online').length} online · {blocks.length} communities
         </div>
-      )})}
+      </div>
+
+      {/* Empty state */}
+      {devices.length===0&&(
+        <div style={{...cardStyle(),textAlign:'center',padding:'40px 20px'}}>
+          <div style={{fontSize:48,marginBottom:12}}>📟</div>
+          <div style={{fontWeight:700,fontSize:14,color:T.text}}>No Devices Registered</div>
+          <div style={{fontSize:12,color:T.text3,marginTop:4}}>Import data or register devices manually</div>
+        </div>
+      )}
+
+      {/* Collapsible block groups */}
+      {blocks.map((b:Block)=>{
+        const bd=devices.filter((d:Device)=>d.block===b.id)
+        if(!bd.length) return null
+        const isOpen=openBlocks[b.id]!==false // default open
+        const onlineCount=bd.filter(d=>d.status==='Online').length
+
+        return(
+          <div key={b.id} style={{borderRadius:16,overflow:'hidden',border:`1px solid ${T.border}`,background:T.card}}>
+
+            {/* Dropdown header - click to toggle */}
+            <button onClick={()=>toggleBlock(b.id)} style={{
+              width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',
+              padding:'14px 16px',background:'transparent',border:'none',cursor:'pointer',
+              borderBottom:isOpen?`1px solid ${T.border}`:'none'
+            }}>
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                {/* Color dot */}
+                <div style={{width:10,height:10,borderRadius:'50%',background:b.color,flexShrink:0}}/>
+                <span style={{fontSize:18}}>{b.emoji}</span>
+                <div style={{textAlign:'left'}}>
+                  <div style={{fontWeight:800,fontSize:14,color:T.text}}>{b.name}</div>
+                  <div style={{fontSize:11,color:T.text3}}>{b.location} · {bd.length} device{bd.length!==1?'s':''}</div>
+                </div>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                {/* Online badge */}
+                <div style={{padding:'3px 8px',borderRadius:20,background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}}>
+                  <span style={{fontSize:10,fontWeight:700,color:'#10b981'}}>●</span>
+                  <span style={{fontSize:10,fontWeight:700,color:'#10b981',marginLeft:4}}>{onlineCount}/{bd.length}</span>
+                </div>
+                {/* Chevron */}
+                <span style={{color:T.text3,fontSize:18,transform:isOpen?'rotate(90deg)':'rotate(0deg)',transition:'transform 0.2s'}}>›</span>
+              </div>
+            </button>
+
+            {/* Device list - shown when open */}
+            {isOpen&&(
+              <div style={{display:'flex',flexDirection:'column'}}>
+                {bd.map((d:Device,i:number)=>(
+                  <div key={d.sfdi||i} style={{
+                    display:'flex',alignItems:'center',
+                    borderBottom:i<bd.length-1?`1px solid ${T.border}`:'none',
+                  }}>
+                    {/* Device row - clickable */}
+                    <div onClick={()=>setSel(d)} style={{
+                      display:'flex',alignItems:'center',gap:12,
+                      padding:'12px 16px',flex:1,cursor:'pointer',
+                    }}>
+                      {/* Icon */}
+                      <div style={{
+                        width:36,height:36,borderRadius:10,
+                        background:d.status==='Online'?'rgba(16,185,129,0.1)':'rgba(230,57,70,0.1)',
+                        display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0
+                      }}>{icons[d.type]||'📟'}</div>
+
+                      {/* Info */}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:12,color:T.arc,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.sfdi}</div>
+                        <div style={{fontSize:11,color:T.text3,marginTop:2}}>{d.type}{d.power?` · ${d.power}W`:''}</div>
+                      </div>
+
+                      {/* Status pill */}
+                      <div style={pill(d.status==='Online'?T.green:T.amber)}>{d.status}</div>
+                      <span style={{color:T.text3,marginLeft:4,flexShrink:0}}>›</span>
+                    </div>
+
+                    {/* Delete button */}
+                    <button onClick={(e)=>{e.stopPropagation();if(window.confirm('Delete '+d.sfdi+'?')) onDelete(d.sfdi)}}
+                      style={{
+                        background:'transparent',border:'none',borderLeft:`1px solid ${T.border}`,
+                        padding:'0 16px',alignSelf:'stretch',cursor:'pointer',color:T.red,
+                        fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0
+                      }}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
