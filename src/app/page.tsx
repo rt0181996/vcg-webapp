@@ -137,12 +137,14 @@ export default function VCGApp() {
   const [apiMsg,setApiMsg]=useState('')
   const [isOffline,setIsOffline]=useState(false)
   const [blocks,setBlocks]=useState<Block[]>(()=>{
-    try{const s=localStorage.getItem('vcg_blocks');const parsed=s?JSON.parse(s):[];return parsed.filter((b:any)=>!['BLK-A','BLK-B','BLK-C','BLK-D'].includes(b.id))}catch{return []}
+    // Start empty - JSONBin will load current state
+    return []
   })
   const [sensors,setSensors]=useState<Record<string,Sensor[]>>(INIT_SENSORS)
   const [evs,setEvs]=useState<EV[]>(INIT_EVS)
   const [devices,setDevices]=useState<Device[]>(()=>{
-    try{const s=localStorage.getItem('vcg_devices');return s?JSON.parse(s):INIT_DEVICES}catch{return INIT_DEVICES}
+    // Start empty - JSONBin will load current state
+    return []
   })
   const [alerts,setAlerts]=useState<Alert[]>([])
   const [notifications,setNotifications]=useState<Notification[]>([])
