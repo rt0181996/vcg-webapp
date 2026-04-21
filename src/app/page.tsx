@@ -498,6 +498,10 @@ export default function VCGApp() {
     }catch(e){console.log('Load devices from API failed:',e)}
   },[])
 
+  // Track when local changes were made — prevents sync from overwriting our deletes
+  const lastLocalChange=React.useRef<number>(0)
+  const markLocalChange=()=>{ lastLocalChange.current=Date.now() }
+
   // Load from localStorage first (instant), then JSONBin (permanent), then API
   useEffect(()=>{
     // 0. Nuke demo blocks from Render API silently
@@ -689,10 +693,6 @@ export default function VCGApp() {
   const totalGen=blocks.reduce((s,b)=>s+b.generation,0)
   const totalCon=blocks.reduce((s,b)=>s+b.consumption,0)
   const totalNet=+(totalGen-totalCon).toFixed(1)
-  // Track when local changes were made — prevents sync from overwriting our deletes
-  const lastLocalChange=React.useRef<number>(0)
-  const markLocalChange=()=>{ lastLocalChange.current=Date.now() }
-
   // Success toast state
   const [successToast,setSuccessToast]=useState<string|null>(null)
   const showSuccess=(msg:string)=>{
