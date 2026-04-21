@@ -513,18 +513,8 @@ export default function VCGApp() {
     fetch(BLOCKS_API+'/BLK-C',{method:'DELETE'}).catch(()=>{})
     fetch(BLOCKS_API+'/BLK-D',{method:'DELETE'}).catch(()=>{})
 
-    // 1. Load from localStorage immediately (same browser)
-    try{
-      const saved=localStorage.getItem('vcg_group12_import')
-      if(saved){
-        const {block,devices:devs,sensors:sens}=JSON.parse(saved)
-        if(block){
-          setBlocks(p=>p.find((b:Block)=>b.id===block.id)?p.map((b:Block)=>b.id===block.id?block:b):[...p,block])
-          if(devs?.length) setDevices((p:Device[])=>{const f=p.filter((d:Device)=>d.block!==block.id);return[...f,...devs]})
-          if(sens?.length) setSensors((p:any)=>({...p,[block.id]:sens}))
-        }
-      }
-    }catch{}
+    // 1. localStorage group12 is secondary - JSONBin is source of truth
+    // Only load from localStorage if JSONBin fails
 
     // 2. Load from JSONBin (permanent cloud - works across all devices)
     loadFromJSONBin().then((data:any)=>{
@@ -574,9 +564,9 @@ export default function VCGApp() {
     })
 
     // 3. Also sync from Render API
-    // Only sync from Render after long delay - JSONBin is source of truth
-    const t1=setTimeout(()=>{loadDevicesFromAPI()},5000)
-    const t2=setTimeout(()=>{loadBlocksFromAPI()},10000)
+    // JSONBin is ONLY source of truth - no Render API loading
+    const t1=setTimeout(()=>{},5000)
+    const t2=setTimeout(()=>{},10000)
 
     // ── Real-time bidirectional sync ──────────────────────────────────────
     // Poll JSONBin every 10 seconds for changes from other devices
