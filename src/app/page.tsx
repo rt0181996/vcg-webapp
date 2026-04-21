@@ -688,17 +688,20 @@ export default function VCGApp() {
     // Also clear localStorage immediately
     try{localStorage.setItem('vcg_blocks',JSON.stringify(newBlocks))}catch{}
     try{localStorage.setItem('vcg_devices',JSON.stringify(newDevices))}catch{}
-    // If deleting Group12 block, clear group12 localStorage too
-    if(id==='G12-BLK'||id.startsWith('G12')){
+    // Always clear group12 localStorage if that block is being deleted
+    let savedG12=null
+    try{savedG12=JSON.parse(localStorage.getItem('vcg_group12_import')||'null')}catch{}
+    const isG12Block=savedG12?.block?.id===id
+    if(isG12Block){
       try{localStorage.removeItem('vcg_group12_import')}catch{}
+      savedG12=null
     }
     // Save to JSONBin FIRST (await it) before anything else
     const data={
       blocks:newBlocks,
       devices:newDevices,
       sensors:newSensors,
-      group12:id==='G12-BLK'||id.startsWith('G12')?null:
-        (()=>{try{return JSON.parse(localStorage.getItem('vcg_group12_import')||'null')}catch{return null}})(),
+      group12:isG12Block?null:savedG12,
       updated_at:new Date().toISOString()
     }
     try{
@@ -933,7 +936,7 @@ export default function VCGApp() {
       {/* CONTENT */}
       <div style={{position:'relative',zIndex:1,padding:'0 12px 120px',maxWidth:900,margin:'-44px auto 0',width:'100%',animation:'pageEnter 0.4s ease',boxSizing:'border-box'}} key={screen}>
         {screen==='home'      && <HomeScreen      T={T} blocks={blocks} onBlockClick={openBlock} apiOnline={apiOnline} apiMsg={apiMsg} alerts={alerts} isOffline={isOffline} onAddCommunity={()=>setScreen('import')} onAddCommunity2={(b:Block)=>addBlock(b)} onNavigate={setScreen} onStartDemo={()=>{setDemoMode(true);setScreen('home')}} darkMode={darkMode} onInstall={handleInstall} canInstall={!!installPrompt&&!installed} installed={installed} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} weatherData={weatherData} onDeleteBlock={deleteBlock} />}
-        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} allDevices={devices} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={(id:string)=>{deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>{markLocalChange();const nd=devices.filter(d=>d.sfdi!==sfdi);setDevices(nd);saveAllToCloud(blocks,nd,sensors)}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
+        {screen==='block'     && activeBlock && <BlockDetailScreen T={T} block={activeBlock} blocks={blocks} sensors={sensors[activeBlock.id]||[]} evs={evs.filter(e=>e.block===activeBlock.id)} devices={devices.filter(d=>d.block===activeBlock.id)} allDevices={devices} history={history[activeBlock.id]||[]} onBack={goHome} onRegister={()=>setScreen('register')} onDeviceClick={(d:Device)=>{setActiveDevice(d);setScreen('devices')}} onDeleteBlock={async(id:string)=>{await deleteBlock(id);goHome()}} onDeviceDelete={(sfdi:string)=>{markLocalChange();const nd=devices.filter(d=>d.sfdi!==sfdi);setDevices(nd);saveAllToCloud(blocks,nd,sensors)}} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} darkMode={darkMode} />}
 
         {screen==='alerts'    && <AlertsScreen    T={T} blocks={blocks} sensors={sensors} alerts={alerts} onMarkRead={(id:string)=>setAlerts(p=>p.map(a=>a.id===id?{...a,read:true}:a))} onMarkAll={()=>setAlerts(p=>p.map(a=>({...a,read:true})))} cardStyle={cardStyle} pill={pill} />}
         {screen==='demand'    && <DemandScreen    T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} pill={pill} goldBtn={goldBtn} />}
