@@ -539,25 +539,21 @@ export default function VCGApp() {
             })
           }
         }
-        // Restore devices
-        if(data.devices?.length){
-          setDevices((p:Device[])=>{
-            const existingIds=new Set(p.map(d=>d.sfdi))
-            const newDevs=data.devices.filter((d:Device)=>!existingIds.has(d.sfdi))
-            return [...p,...newDevs]
-          })
+        // Restore devices - replace with cloud version
+        if(data.devices!==undefined){
+          setDevices(data.devices)
         }
         // Restore sensors
         if(data.sensors&&Object.keys(data.sensors).length){
           setSensors((p:any)=>({...data.sensors,...p}))
         }
-        // Restore Group12
+        // Restore Group12 block metadata (devices come from data.devices already)
         if(data.group12){
-          const {block,devices:devs,sensors:sens}=data.group12
+          const {block,sensors:sens}=data.group12
           if(block){
             setBlocks((p:Block[])=>p.find(b=>b.id===block.id)?p.map(b=>b.id===block.id?block:b):[...p,block])
-            if(devs?.length) setDevices((p:Device[])=>{const f=p.filter(d=>d.block!==block.id);return[...f,...devs]})
             if(sens?.length) setSensors((p:any)=>({...p,[block.id]:sens}))
+            setHistory((p:any)=>({...p,[block.id]:p[block.id]||makeHistory(block.id)}))
           }
         }
       }catch(e){console.log('JSONBin restore error:',e)}
@@ -574,7 +570,7 @@ export default function VCGApp() {
       try{
         // Skip sync if we made a local change in the last 15 seconds
         // This prevents the poller from restoring deleted data
-        if(Date.now()-lastLocalChange.current < 30000) return
+        if(Date.now()-lastLocalChange.current < 5000) return
 
         const data=await loadFromJSONBin()
         if(!data) return
@@ -606,9 +602,15 @@ export default function VCGApp() {
           })
         }
 
-        // Sync devices from other devices
-        if(data.devices?.length){
-          setDevices((_prev:Device[])=>data.devices)
+        // Sync devices from other devices - cloud is authoritative
+        if(data.devices!==undefined){
+          setDevices((prev:Device[])=>{
+            // Only log if there's actually a change
+            if(JSON.stringify(prev)!==JSON.stringify(data.devices)){
+              console.log(`🔄 Sync: devices ${prev.length} → ${data.devices.length}`)
+            }
+            return data.devices
+          })
         }
 
         // Sync sensors from other devices
@@ -616,18 +618,13 @@ export default function VCGApp() {
           setSensors((prev:any)=>({...prev,...data.sensors}))
         }
 
-        // Sync Group12 data
+        // Sync Group12 block metadata (NOT devices - they come from data.devices)
         if(data.group12?.block){
-          const {block,devices:devs,sensors:sens}=data.group12
+          const {block,sensors:sens}=data.group12
           setBlocks((prev:Block[])=>prev.find(b=>b.id===block.id)
             ?prev.map(b=>b.id===block.id?block:b)
             :[...prev,block])
-          if(devs?.length) setDevices((prev:Device[])=>{
-            const filtered=prev.filter(d=>d.block!==block.id)
-            return[...filtered,...devs]
-          })
           if(sens?.length) setSensors((prev:any)=>({...prev,[block.id]:sens}))
-          // Ensure Group12 block has history for charts
           setHistory((p:any)=>({...p,[block.id]:p[block.id]||makeHistory(block.id)}))
           try{localStorage.setItem('vcg_group12_import',JSON.stringify(data.group12))}catch{}
         }
@@ -658,11 +655,29 @@ export default function VCGApp() {
     addNotification({title:'Community Added',message:`${b.name} joined the grid`,type:'success'})
     showSuccess(`${b.name} added to grid! ⚡`)
   }
-  const addDevice=(d:Device)=>{
+  const addDevice=async(d:Device)=>{
     markLocalChange()
     const newDevices=[...devices,d]
     setDevices(newDevices)
-    saveAllToCloud(blocks,newDevices,sensors)
+    // Save to JSONBin immediately with latest state
+    try{localStorage.setItem('vcg_devices',JSON.stringify(newDevices))}catch{}
+    const data={
+      blocks,
+      devices:newDevices,
+      sensors,
+      group12:(()=>{try{return JSON.parse(localStorage.getItem('vcg_group12_import')||'null')}catch{return null}})(),
+      updated_at:new Date().toISOString()
+    }
+    try{
+      await fetch(JSONBIN_URL,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json','X-Master-Key':JSONBIN_KEY},
+        body:JSON.stringify(data)
+      })
+      console.log('✅ Device added and saved to JSONBin')
+    }catch(e){console.log('JSONBin save failed:',e)}
+    // Also push to Render
+    fetch(API_V1+'/devices/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({devices:newDevices})}).catch(()=>{})
     addNotification({title:'Device Registered',message:`${d.sfdi} added to ${d.block}`,type:'success'})
     showSuccess(`Device ${d.sfdi} registered!`)
   }
