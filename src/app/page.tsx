@@ -1526,7 +1526,7 @@ function HomeScreen({T,blocks,onBlockClick,apiOnline,apiMsg,alerts,isOffline,onA
               </div>
             </div>
           </div>
-        )
+      )
       })()}
 
       {blocks.map((b:Block,i:number)=>(
@@ -1797,6 +1797,7 @@ function MethodologyScreen({T,blocks,cardStyle,pill,ironBtn}:any) {
 // ── BLOCK DETAIL ──────────────────────────────────────────────────────────────
 function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,history,onBack,onRegister,onDeviceClick,onDeviceDelete,onDeleteBlock,darkMode,cardStyle,pill,ironBtn}:any) {
   const live=blocks.find((x:Block)=>x.id===b.id)||b
+  const [devOpen,setDevOpen]=useState(false)
   const sc=live.status==='Surplus'?T.green:live.status==='Deficit'?T.red:T.arc
   const recentH=(history||[]).slice(-6)
   return (
@@ -2146,10 +2147,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
         </div>
       ))}</>}
       {/* Collapsible Devices Section */}
-      {(()=>{
-        const [devOpen,setDevOpen]=React.useState(false)
-        return(
-          <div style={{borderRadius:16,overflow:'hidden',border:`1px solid ${T.border}`,background:T.card}}>
+      <div style={{borderRadius:16,overflow:'hidden',border:`1px solid ${T.border}`,background:T.card}}>
             {/* Header - click to toggle */}
             <button onClick={()=>setDevOpen(p=>!p)} style={{
               width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',
@@ -2224,9 +2222,7 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
           })}
               </div>
             ))}
-          </div>
-        )
-      })()}
+      </div>
       <button onClick={onRegister} style={ironBtn()}>➕ Register Device to {b.name}</button>
       {true&&(
         <button onClick={()=>{if(window.confirm('Delete '+b.name+' and all its devices?')) onDeleteBlock(b.id)}}
