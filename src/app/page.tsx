@@ -2145,14 +2145,43 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
           <div style={{height:4,background:T.bg,borderRadius:2,overflow:'hidden',marginTop:8}}><div style={{height:'100%',width:ev.soc+'%',background:ev.status==='CHARGING'?`linear-gradient(90deg,${T.gold},${T.amber})`:`linear-gradient(90deg,${T.arc},#0891b2)`,borderRadius:2}}/></div>
         </div>
       ))}</>}
-      <SH T={T} title={`Devices (${devices.length})`} />
-      {devices.length===0?(
-        <div style={{...cardStyle(),textAlign:'center',padding:'24px'}}>
-          <div style={{fontSize:32,marginBottom:8}}>📭</div>
-          <div style={{fontSize:13,color:T.text2}}>No devices registered</div>
-        </div>
-      ):(
-        <div style={{borderRadius:16,overflow:'hidden',border:`1px solid ${T.border}`,background:T.card}}>
+      {/* Collapsible Devices Section */}
+      {(()=>{
+        const [devOpen,setDevOpen]=React.useState(false)
+        return(
+          <div style={{borderRadius:16,overflow:'hidden',border:`1px solid ${T.border}`,background:T.card}}>
+            {/* Header - click to toggle */}
+            <button onClick={()=>setDevOpen(p=>!p)} style={{
+              width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',
+              padding:'14px 16px',background:'transparent',border:'none',cursor:'pointer',
+              borderBottom:devOpen&&devices.length>0?`1px solid ${T.border}`:'none'
+            }}>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:16}}>📟</span>
+                <span style={{fontWeight:800,fontSize:14,color:T.text}}>Devices</span>
+                <span style={{padding:'2px 8px',borderRadius:20,background:T.arcLight,
+                  fontSize:11,fontWeight:700,color:T.arc}}>{devices.length}</span>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                {devices.length>0&&(
+                  <span style={{fontSize:11,color:'#10b981',fontWeight:600}}>
+                    ● {devices.filter((d:any)=>d.status==='Online'||d.status==='online').length} online
+                  </span>
+                )}
+                <span style={{color:T.text3,fontSize:18,
+                  transform:devOpen?'rotate(90deg)':'rotate(0deg)',
+                  transition:'transform 0.2s',display:'inline-block'}}>›</span>
+              </div>
+            </button>
+
+            {/* Device list - shown when open */}
+            {devOpen&&(devices.length===0?(
+              <div style={{textAlign:'center',padding:'24px'}}>
+                <div style={{fontSize:32,marginBottom:8}}>📭</div>
+                <div style={{fontSize:13,color:T.text2}}>No devices registered</div>
+              </div>
+            ):(
+              <div>
           {devices.map((d:Device,i:number)=>{
             const icons:Record<string,string>={
               'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗',
@@ -2193,8 +2222,11 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
               </div>
             )
           })}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )
+      })()}
       <button onClick={onRegister} style={ironBtn()}>➕ Register Device to {b.name}</button>
       {true&&(
         <button onClick={()=>{if(window.confirm('Delete '+b.name+' and all its devices?')) onDeleteBlock(b.id)}}
