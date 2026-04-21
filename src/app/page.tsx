@@ -574,8 +574,9 @@ export default function VCGApp() {
     })
 
     // 3. Also sync from Render API
-    const t1=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI()},3000)
-    const t2=setTimeout(()=>{loadDevicesFromAPI();loadGroup12FromAPI();loadBlocksFromAPI()},8000)
+    // Only sync from Render after long delay - JSONBin is source of truth
+    const t1=setTimeout(()=>{loadDevicesFromAPI()},5000)
+    const t2=setTimeout(()=>{loadBlocksFromAPI()},10000)
 
     // ── Real-time bidirectional sync ──────────────────────────────────────
     // Poll JSONBin every 10 seconds for changes from other devices
@@ -989,7 +990,6 @@ export default function VCGApp() {
   }
   // Also sync from Render API
   await loadDevicesFromAPI()
-  await loadGroup12FromAPI()
   await loadBlocksFromAPI()
   addNotification({title:'🔄 Sync Complete',message:'Data loaded from cloud storage',type:'success'})
   if(screen==='block'){goHome()}
