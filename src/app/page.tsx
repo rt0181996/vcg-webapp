@@ -2146,30 +2146,55 @@ function BlockDetailScreen({T,block:b,blocks,sensors,evs,devices,allDevices,hist
         </div>
       ))}</>}
       <SH T={T} title={`Devices (${devices.length})`} />
-      <div style={cardStyle({padding:16})}>
-        {devices.length===0?<div style={{textAlign:'center',padding:'16px 0'}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:13,color:T.text2}}>No devices</div></div>:(
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>{devices.map((d:Device,i:number)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',background:T.bg,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden',transition:'all 0.15s'}}>
-              <div onClick={()=>onDeviceClick(d)} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',flex:1,cursor:'pointer'}}
-                onMouseOver={e=>{e.currentTarget.parentElement!.style.borderColor=T.arc+'50'}}
-                onMouseOut={e=>{e.currentTarget.parentElement!.style.borderColor=T.border}}>
-                <div style={{width:36,height:36,borderRadius:10,background:T.arcLight,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>📟</div>
-                <div style={{flex:1}}>
-                  <div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:12,color:T.arc}}>{d.sfdi}</div>
-                  <div style={{fontSize:11,color:T.text3}}>{d.type}</div>
+      {devices.length===0?(
+        <div style={{...cardStyle(),textAlign:'center',padding:'24px'}}>
+          <div style={{fontSize:32,marginBottom:8}}>📭</div>
+          <div style={{fontSize:13,color:T.text2}}>No devices registered</div>
+        </div>
+      ):(
+        <div style={{borderRadius:16,overflow:'hidden',border:`1px solid ${T.border}`,background:T.card}}>
+          {devices.map((d:Device,i:number)=>{
+            const icons:Record<string,string>={
+              'Smart Meter':'📟','Solar Inverter':'☀️','EV Charger':'🚗',
+              'Wind Turbine':'💨','Battery Storage':'🔋','HVAC Unit':'❄️',
+              'Load Controller':'🔌','TemperatureSensor':'🌡️','BatterySensor':'🔋',
+              'HumiditySensor':'💧','CO2Sensor':'🌿','LightSensor':'☀️',
+              'MotionSensor':'🏃','DoorSensor':'🚪','FlowSensor':'💧',
+              'PressureSensor':'🌀','SmartMeter':'⚡',
+            }
+            const isOnline=d.status==='Online'||d.status==='online'
+            return(
+              <div key={d.sfdi||i} style={{
+                display:'flex',alignItems:'center',
+                borderBottom:i<devices.length-1?`1px solid ${T.border}`:'none',
+              }}>
+                <div onClick={()=>onDeviceClick(d)} style={{
+                  display:'flex',alignItems:'center',gap:12,
+                  padding:'12px 14px',flex:1,cursor:'pointer',
+                }}>
+                  <div style={{
+                    width:38,height:38,borderRadius:12,flexShrink:0,
+                    background:isOnline?'rgba(16,185,129,0.1)':'rgba(230,57,70,0.1)',
+                    display:'flex',alignItems:'center',justifyContent:'center',fontSize:18
+                  }}>{icons[d.type]||'📟'}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontWeight:700,fontSize:12,color:T.arc,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.sfdi}</div>
+                    <div style={{fontSize:11,color:T.text3,marginTop:2}}>{d.type}</div>
+                  </div>
+                  <div style={pill(isOnline?T.green:T.amber)}>{d.status}</div>
+                  <span style={{color:T.text3,marginLeft:6,flexShrink:0}}>›</span>
                 </div>
-                <div style={pill(d.status==='Online'?T.green:T.amber)}>{d.status}</div>
+                <button onClick={(e)=>{e.stopPropagation();if(window.confirm('Delete '+d.sfdi+'?')) onDeviceDelete(d.sfdi)}}
+                  style={{
+                    background:'transparent',border:'none',borderLeft:`1px solid ${T.border}`,
+                    padding:'0 14px',alignSelf:'stretch',cursor:'pointer',
+                    color:T.red,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0
+                  }}>🗑️</button>
               </div>
-              <button onClick={()=>{if(window.confirm('Delete '+d.sfdi+'?')) onDeviceDelete(d.sfdi)}}
-                style={{background:'rgba(230,57,70,0.1)',border:'none',borderLeft:`1px solid ${T.border}`,
-                  padding:'0 12px',alignSelf:'stretch',cursor:'pointer',color:T.red,
-                  fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                🗑️
-              </button>
-            </div>
-          ))}</div>
-        )}
-      </div>
+            )
+          })}
+        </div>
+      )}
       <button onClick={onRegister} style={ironBtn()}>➕ Register Device to {b.name}</button>
       {true&&(
         <button onClick={()=>{if(window.confirm('Delete '+b.name+' and all its devices?')) onDeleteBlock(b.id)}}
