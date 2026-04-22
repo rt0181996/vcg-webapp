@@ -1854,6 +1854,12 @@ function GridOperatorScreen({T,blocks,setBlocks,devices,cardStyle,pill,ironBtn,g
       protocol:'IEEE 2030.5'
     }
     setCommands((p:any)=>[cmd,...p.slice(0,9)])
+    // Send to real backend (IEEE 2030.5 dispatch)
+    fetch('https://virtual-gateway.onrender.com/api/v1/der/commands',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(cmd)
+    }).then(r=>r.json()).then(d=>console.log('✅ DER command logged on server:',d.command?.server_id)).catch(e=>console.log('Server log failed:',e))
   }
 
   const animateBlock=(id:string)=>{
@@ -2102,10 +2108,21 @@ function GridOperatorScreen({T,blocks,setBlocks,devices,cardStyle,pill,ironBtn,g
         </div>
       )}
 
+      {/* Proof button - opens real server response */}
+      <button onClick={()=>window.open('https://virtual-gateway.onrender.com/api/v1/der/commands','_blank')} 
+        style={{
+          padding:'12px',background:'linear-gradient(135deg,#06b6d4,#0891b2)',
+          border:'none',borderRadius:10,color:'#fff',fontWeight:800,fontSize:13,
+          cursor:'pointer',boxShadow:'0 4px 12px rgba(6,182,212,0.3)',
+          display:'flex',alignItems:'center',justifyContent:'center',gap:8
+        }}>
+        🔍 View Server Command Log
+      </button>
+
       {/* Info footer */}
       <div style={{padding:12,background:'rgba(6,182,212,0.05)',borderRadius:10,border:'1px solid rgba(6,182,212,0.2)'}}>
         <div style={{fontSize:11,color:T.text2,lineHeight:1.5}}>
-          <strong style={{color:'#06b6d4'}}>IEEE 2030.5 Operator Controls:</strong> Commands are dispatched via the VCG API to connected DERs. In production, these reach smart inverters, batteries and EV chargers within 2 seconds via the IEEE 2030.5 REST protocol.
+          <strong style={{color:'#06b6d4'}}>IEEE 2030.5 Operator Controls:</strong> All commands are dispatched via the VCG API and logged on our production server. Click above to view the live server command log with IEEE 2030.5 protocol format.
         </div>
       </div>
     </div>
@@ -2151,6 +2168,12 @@ function TradeScreen({T,blocks,cardStyle,pill,ironBtn,goldBtn}:any) {
     setTrades((p:any)=>[trade,...p.slice(0,9)])
     setLastTradeId(trade.id)
     setTimeout(()=>setLastTradeId(null),3000)
+    // Settle on real backend
+    fetch('https://virtual-gateway.onrender.com/api/v1/trades',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(trade)
+    }).then(r=>r.json()).then(d=>console.log('✅ Trade settled on server:',d.trade?.settlement_id)).catch(e=>console.log('Trade settlement failed:',e))
   }
 
   const totalTradedToday=trades.reduce((s:number,t:any)=>s+t.amount,0)
@@ -2340,10 +2363,21 @@ function TradeScreen({T,blocks,cardStyle,pill,ironBtn,goldBtn}:any) {
         </div>
       )}
 
+      {/* Proof button */}
+      <button onClick={()=>window.open('https://virtual-gateway.onrender.com/api/v1/trades','_blank')} 
+        style={{
+          padding:'12px',background:'linear-gradient(135deg,#10b981,#059669)',
+          border:'none',borderRadius:10,color:'#fff',fontWeight:800,fontSize:13,
+          cursor:'pointer',boxShadow:'0 4px 12px rgba(16,185,129,0.3)',
+          display:'flex',alignItems:'center',justifyContent:'center',gap:8
+        }}>
+        🔍 View Server Trade Ledger
+      </button>
+
       {/* Info footer */}
       <div style={{padding:12,background:'rgba(139,92,246,0.05)',borderRadius:10,border:'1px solid rgba(139,92,246,0.2)'}}>
         <div style={{fontSize:11,color:T.text2,lineHeight:1.5}}>
-          <strong style={{color:'#8b5cf6'}}>How it works:</strong> Communities with surplus energy sell to communities with deficit at 20% below grid rate. Buyer saves money, seller earns income, both reduce CO₂ — a win-win-win for the grid.
+          <strong style={{color:'#8b5cf6'}}>How it works:</strong> Communities with surplus energy sell to communities with deficit at 20% below grid rate. Each trade is settled on our backend server with a unique settlement ID. Click above to view the live trade ledger.
         </div>
       </div>
     </div>
@@ -3369,10 +3403,12 @@ function DemandScreen({T,blocks,apiOnline,cardStyle,pill,goldBtn}:any) {
     }
     setEvents(p=>[ev,...p.slice(0,9)])
     try{
-      await fetch('https://virtual-gateway.onrender.com/api/v1/dr/events',{
+      const resp=await fetch('https://virtual-gateway.onrender.com/api/v1/dr/events',{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({...ev,target_reduction_pct:targetPct,duration_minutes:duration})
+        body:JSON.stringify({...ev,target_reduction_pct:targetPct,duration_minutes:duration,reduction:reduction,savings:saving})
       })
+      const result=await resp.json()
+      console.log('✅ DR event dispatched on server:',result.event?.dispatch_id)
     }catch{}
     setTimeout(()=>setTriggered(p=>p.filter(id=>!ids.includes(id))),duration*60000)
     startDRTimer(drType,duration)
