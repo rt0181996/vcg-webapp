@@ -70,7 +70,7 @@ interface Alert { id:string;block:string;type:string;message:string;severity:'hi
 interface HistoryEntry { time:string;block:string;generation:number;consumption:number;net:number;cost:number }
 interface Notification { id:string;title:string;message:string;type:'info'|'warning'|'error'|'success';time:string;read:boolean }
 interface SimReading { deviceId:string;type:string;block:string;power:number;voltage:number;temperature:number;timestamp:string;sent:boolean }
-type Screen = 'home'|'block'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'group12'|'methodology'
+type Screen = 'home'|'block'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'group12'|'methodology'|'trade'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const makeSensors=(t=20,sol=600,bat=50,gi=1,ge=1,ws=25,ec=0.38,co2=2):Sensor[]=>[
@@ -788,6 +788,7 @@ export default function VCGApp() {
   const NAV=[
     {id:'home',    icon:'🏠',label:'Home'},
     {id:'alerts',  icon:'⚠️',label:'Alerts',badge:unreadAlerts},
+    {id:'trade',   icon:'💱',label:'Trade'},
     {id:'demand',  icon:'⚡',label:'Demand'},
     {id:'settings',icon:'⚙️',label:'More'},
   ]
@@ -1104,6 +1105,7 @@ export default function VCGApp() {
 }} cardStyle={cardStyle} ironBtn={ironBtn} />}
 
         {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} darkMode={darkMode} />}
+        {screen==='trade' && <TradeScreen T={T} blocks={blocks} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} goldBtn={goldBtn} />}
         {screen==='methodology' && <MethodologyScreen T={T} blocks={blocks} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
         {screen==='fiware'    && <FIWAREScreen    T={T} blocks={blocks} sensors={sensors} apiOnline={apiOnline} isOffline={isOffline} addNotification={addNotification} cardStyle={cardStyle} ironBtn={ironBtn} />}
@@ -1824,6 +1826,244 @@ function ChartsScreen({T,blocks,history,sensors,cardStyle,darkMode}:any) {
     </div>
   )
 }
+// ── P2P ENERGY TRADING SCREEN ────────────────────────────────────────────
+function TradeScreen({T,blocks,cardStyle,pill,ironBtn,goldBtn}:any) {
+  const [trades,setTrades]=useState<any[]>([])
+  const [lastTradeId,setLastTradeId]=useState<string|null>(null)
+
+  // Detect surplus and deficit communities
+  const surplus=blocks.filter((b:Block)=>b.net>0).sort((a:Block,b:Block)=>b.net-a.net)
+  const deficit=blocks.filter((b:Block)=>b.net<0).sort((a:Block,b:Block)=>a.net-b.net)
+
+  // P2P pricing: 80% of grid rate (savings for both parties)
+  const P2P_RATE=+(IRISH_ELECTRICITY_RATE*0.80).toFixed(3) // €0.304/kWh
+  const GRID_RATE=IRISH_ELECTRICITY_RATE // €0.38/kWh
+
+  // Generate auto-match suggestions
+  const suggestions=surplus.map((seller:Block,i:number)=>{
+    const buyer=deficit[i]
+    if(!buyer) return null
+    const tradeAmount=Math.min(seller.net,Math.abs(buyer.net))
+    const savingBuyer=+(tradeAmount*(GRID_RATE-P2P_RATE)).toFixed(2)  // buyer saves vs grid
+    const earnSeller=+(tradeAmount*P2P_RATE).toFixed(2)  // seller earns per hour
+    const co2Saved=+(tradeAmount*IRISH_GRID_CARBON).toFixed(2)
+    return{seller,buyer,tradeAmount:+tradeAmount.toFixed(1),savingBuyer,earnSeller,co2Saved,rate:P2P_RATE}
+  }).filter(Boolean)
+
+  const executeTrade=(s:any)=>{
+    const trade={
+      id:'TRD-'+Date.now().toString(36).toUpperCase(),
+      time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),
+      seller:s.seller.name,
+      buyer:s.buyer.name,
+      amount:s.tradeAmount,
+      rate:s.rate,
+      value:+(s.tradeAmount*s.rate).toFixed(2),
+      co2:s.co2Saved,
+      status:'Completed'
+    }
+    setTrades((p:any)=>[trade,...p.slice(0,9)])
+    setLastTradeId(trade.id)
+    setTimeout(()=>setLastTradeId(null),3000)
+  }
+
+  const totalTradedToday=trades.reduce((s:number,t:any)=>s+t.amount,0)
+  const totalValueToday=trades.reduce((s:number,t:any)=>s+t.value,0)
+  const totalCO2SavedToday=trades.reduce((s:number,t:any)=>s+t.co2,0)
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      {/* Header */}
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#0a1a0f)',border:'none'})}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#10b981'}}>💱 P2P Energy Trading</div>
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>
+          Peer-to-Peer energy exchange between communities · IEEE 2030.5
+        </div>
+      </div>
+
+      {/* Success Toast */}
+      {lastTradeId&&(
+        <div style={{...cardStyle({background:'linear-gradient(135deg,#10b981,#059669)',border:'none'}),animation:'successPop 0.4s ease-out'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:24}}>⚡</span>
+            <div>
+              <div style={{fontWeight:800,fontSize:14,color:'#fff'}}>Trade Executed Successfully!</div>
+              <div style={{fontSize:11,color:'rgba(255,255,255,0.85)',marginTop:2}}>{lastTradeId}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Grid Status Dashboard */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12}}>📊 Grid Status</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <div style={{padding:12,background:'rgba(16,185,129,0.1)',borderRadius:10,border:'1px solid rgba(16,185,129,0.3)'}}>
+            <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1}}>SURPLUS</div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:900,color:'#10b981',marginTop:4}}>
+              {surplus.length} blocks
+            </div>
+            <div style={{fontSize:11,color:'#10b981',marginTop:2}}>
+              +{surplus.reduce((s:number,b:Block)=>s+b.net,0).toFixed(1)} kW available
+            </div>
+          </div>
+          <div style={{padding:12,background:'rgba(230,57,70,0.1)',borderRadius:10,border:'1px solid rgba(230,57,70,0.3)'}}>
+            <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1}}>DEFICIT</div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:900,color:'#e63946',marginTop:4}}>
+              {deficit.length} blocks
+            </div>
+            <div style={{fontSize:11,color:'#e63946',marginTop:2}}>
+              {deficit.reduce((s:number,b:Block)=>s+b.net,0).toFixed(1)} kW needed
+            </div>
+          </div>
+        </div>
+        <div style={{padding:10,background:T.bg,borderRadius:10,border:`1px solid ${T.border}`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <div style={{fontSize:10,color:T.text3,letterSpacing:1}}>P2P RATE</div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,fontWeight:800,color:'#ffd60a'}}>€{P2P_RATE}/kWh</div>
+          </div>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:10,color:T.text3}}>Grid rate: €{GRID_RATE}/kWh</div>
+            <div style={{fontSize:11,color:'#10b981',fontWeight:700}}>20% cheaper!</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Today's Trade Summary */}
+      {trades.length>0&&(
+        <div style={cardStyle({border:'1px solid rgba(16,185,129,0.3)',background:'rgba(16,185,129,0.03)'})}>
+          <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12}}>📈 Today\'s Trading</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:18,fontWeight:900,color:'#10b981'}}>{trades.length}</div>
+              <div style={{fontSize:9,color:T.text3,marginTop:2}}>Trades</div>
+            </div>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:18,fontWeight:900,color:'#ffd60a'}}>€{totalValueToday.toFixed(2)}</div>
+              <div style={{fontSize:9,color:T.text3,marginTop:2}}>Value</div>
+            </div>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:18,fontWeight:900,color:'#58c4dc'}}>{totalCO2SavedToday.toFixed(1)}kg</div>
+              <div style={{fontSize:9,color:T.text3,marginTop:2}}>CO₂ Saved</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-match Suggestions */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+          💡 Suggested Trades
+          {suggestions.length>0&&<span style={{padding:'2px 8px',background:'rgba(255,214,10,0.15)',borderRadius:20,fontSize:10,color:'#ffd60a',fontWeight:700}}>{suggestions.length} available</span>}
+        </div>
+
+        {suggestions.length===0?(
+          <div style={{textAlign:'center',padding:'30px 20px'}}>
+            <div style={{fontSize:36,marginBottom:10}}>⚖️</div>
+            <div style={{fontSize:13,color:T.text2,fontWeight:600}}>Grid Balanced</div>
+            <div style={{fontSize:11,color:T.text3,marginTop:4}}>No trades needed — all communities are balanced!</div>
+          </div>
+        ):(
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {suggestions.map((s:any,i:number)=>(
+              <div key={i} style={{
+                padding:14,
+                background:'linear-gradient(135deg,rgba(16,185,129,0.05),rgba(88,196,220,0.05))',
+                borderRadius:12,
+                border:'1px solid rgba(16,185,129,0.2)',
+              }}>
+                {/* Trade visualization */}
+                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+                  {/* Seller */}
+                  <div style={{flex:1,padding:10,background:'rgba(16,185,129,0.08)',borderRadius:10,border:'1px solid rgba(16,185,129,0.3)'}}>
+                    <div style={{fontSize:10,color:T.text3,letterSpacing:1}}>SELLER</div>
+                    <div style={{fontSize:13,fontWeight:800,color:T.text,marginTop:2}}>{s.seller.emoji} {s.seller.name}</div>
+                    <div style={{fontSize:11,color:'#10b981',marginTop:2}}>+{s.seller.net.toFixed(1)} kW available</div>
+                  </div>
+                  {/* Arrow */}
+                  <div style={{fontSize:24,color:'#ffd60a'}}>→</div>
+                  {/* Buyer */}
+                  <div style={{flex:1,padding:10,background:'rgba(230,57,70,0.08)',borderRadius:10,border:'1px solid rgba(230,57,70,0.3)'}}>
+                    <div style={{fontSize:10,color:T.text3,letterSpacing:1}}>BUYER</div>
+                    <div style={{fontSize:13,fontWeight:800,color:T.text,marginTop:2}}>{s.buyer.emoji} {s.buyer.name}</div>
+                    <div style={{fontSize:11,color:'#e63946',marginTop:2}}>{s.buyer.net.toFixed(1)} kW needed</div>
+                  </div>
+                </div>
+
+                {/* Trade details */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
+                  <div style={{padding:8,background:T.bg,borderRadius:8,textAlign:'center'}}>
+                    <div style={{fontSize:9,color:T.text3}}>Amount</div>
+                    <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:800,color:'#ffd60a'}}>{s.tradeAmount} kW</div>
+                  </div>
+                  <div style={{padding:8,background:T.bg,borderRadius:8,textAlign:'center'}}>
+                    <div style={{fontSize:9,color:T.text3}}>Buyer saves</div>
+                    <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:800,color:'#10b981'}}>€{s.savingBuyer}/h</div>
+                  </div>
+                  <div style={{padding:8,background:T.bg,borderRadius:8,textAlign:'center'}}>
+                    <div style={{fontSize:9,color:T.text3}}>Seller earns</div>
+                    <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:800,color:'#58c4dc'}}>€{s.earnSeller}/h</div>
+                  </div>
+                </div>
+
+                {/* Execute button */}
+                <button onClick={()=>executeTrade(s)} style={{
+                  width:'100%',padding:'10px',
+                  background:'linear-gradient(135deg,#10b981,#059669)',
+                  border:'none',borderRadius:10,
+                  color:'#fff',fontWeight:800,fontSize:13,
+                  cursor:'pointer',letterSpacing:1,
+                  boxShadow:'0 4px 12px rgba(16,185,129,0.3)',
+                }}>⚡ Execute Trade</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Trade History */}
+      {trades.length>0&&(
+        <div style={cardStyle()}>
+          <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12}}>📜 Recent Trades</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {trades.map((t:any,i:number)=>(
+              <div key={t.id} style={{
+                padding:10,background:T.bg,borderRadius:10,border:`1px solid ${T.border}`,
+                display:'flex',alignItems:'center',justifyContent:'space-between'
+              }}>
+                <div style={{display:'flex',alignItems:'center',gap:10,flex:1,minWidth:0}}>
+                  <span style={{fontSize:16,color:'#10b981'}}>✓</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:700,color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                      {t.seller} → {t.buyer}
+                    </div>
+                    <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:T.text3,marginTop:2}}>
+                      {t.id} · {t.time}
+                    </div>
+                  </div>
+                </div>
+                <div style={{textAlign:'right',flexShrink:0}}>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:800,color:'#ffd60a'}}>
+                    {t.amount} kW
+                  </div>
+                  <div style={{fontSize:10,color:'#10b981',marginTop:1}}>€{t.value}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Info footer */}
+      <div style={{padding:12,background:'rgba(139,92,246,0.05)',borderRadius:10,border:'1px solid rgba(139,92,246,0.2)'}}>
+        <div style={{fontSize:11,color:T.text2,lineHeight:1.5}}>
+          <strong style={{color:'#8b5cf6'}}>How it works:</strong> Communities with surplus energy sell to communities with deficit at 20% below grid rate. Buyer saves money, seller earns income, both reduce CO₂ — a win-win-win for the grid.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── METHODOLOGY SCREEN ────────────────────────────────────────────────────────
 function MethodologyScreen({T,blocks,cardStyle,pill,ironBtn}:any) {
   const exampleConsumption=100 // kW
