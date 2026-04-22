@@ -281,6 +281,10 @@ export default function VCGApp() {
   // Track if initial sync from JSONBin is complete
   // Prevents mobile from uploading stale localStorage data to cloud
   const initialSyncDone=useRef(false)
+  
+  // Loading screen state
+  const [isLoading,setIsLoading]=useState(true)
+  const [loadingMessage,setLoadingMessage]=useState('Connecting to Virtual Gateway')
 
   // ── localStorage: save blocks/devices on change ──────────────────────────
   useEffect(()=>{
@@ -532,6 +536,7 @@ export default function VCGApp() {
     // Only load from localStorage if JSONBin fails
 
     // 2. Load from JSONBin (permanent cloud - works across all devices)
+    setLoadingMessage('Loading communities')
     loadFromJSONBin().then((data:any)=>{
       if(!data) return
       try{
@@ -575,6 +580,8 @@ export default function VCGApp() {
       // Mark initial sync as done so auto-save works from now on
       initialSyncDone.current=true
       console.log('✅ Initial sync complete - auto-save enabled')
+      // Hide loading screen with a small delay for smooth transition
+      setTimeout(()=>setIsLoading(false),500)
     })
 
     // 3. Also sync from Render API
@@ -852,6 +859,69 @@ export default function VCGApp() {
       <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:'rgba(88,196,220,0.6)',letterSpacing:2,animation:'blink 1s ease-in-out infinite'}}>INITIALIZING GATEWAY...</div>
     </div>
   )
+
+  // Loading screen - shown while JSONBin fetches data
+  if(isLoading){
+    return(
+      <div style={{
+        position:'fixed',inset:0,
+        background:'radial-gradient(circle at center,#0a1628 0%,#050810 100%)',
+        display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+        zIndex:99999,overflow:'hidden',
+      }}>
+        <style>{`
+          @keyframes vcgSpin{to{transform:rotate(360deg)}}
+          @keyframes vcgPulse{0%,100%{opacity:0.8;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+          @keyframes vcgFade{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
+          @keyframes vcgOrbit{to{transform:rotate(360deg)}}
+          @keyframes vcgDots{0%,20%{opacity:0.3}50%{opacity:1}80%,100%{opacity:0.3}}
+        `}</style>
+
+        {/* Animated background circles */}
+        <div style={{position:'absolute',width:600,height:600,borderRadius:'50%',border:'1px solid rgba(255,214,10,0.05)',animation:'vcgOrbit 30s linear infinite'}}/>
+        <div style={{position:'absolute',width:400,height:400,borderRadius:'50%',border:'1px solid rgba(88,196,220,0.08)',animation:'vcgOrbit 20s linear infinite reverse'}}/>
+        <div style={{position:'absolute',width:200,height:200,borderRadius:'50%',border:'1px dashed rgba(255,214,10,0.1)',animation:'vcgOrbit 15s linear infinite'}}/>
+
+        {/* Arc Reactor centerpiece */}
+        <div style={{position:'relative',width:180,height:180,display:'flex',alignItems:'center',justifyContent:'center',animation:'vcgPulse 2s ease-in-out infinite'}}>
+          {/* Outer gold ring */}
+          <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'3px solid rgba(255,214,10,0.2)',animation:'vcgSpin 8s linear infinite',borderTopColor:'#ffd60a',boxShadow:'0 0 40px rgba(255,214,10,0.3)'}}/>
+          {/* Middle cyan ring */}
+          <div style={{position:'absolute',inset:20,borderRadius:'50%',border:'2px solid rgba(88,196,220,0.3)',animation:'vcgSpin 5s linear infinite reverse',borderTopColor:'#58c4dc'}}/>
+          {/* Inner red dashed ring */}
+          <div style={{position:'absolute',inset:40,borderRadius:'50%',border:'2px dashed rgba(230,57,70,0.4)',animation:'vcgSpin 3s linear infinite'}}/>
+          {/* Glowing core */}
+          <div style={{position:'absolute',inset:60,borderRadius:'50%',background:'radial-gradient(circle,#7dd5e8 0%,#0d4f6e 50%,#061a28 100%)',boxShadow:'0 0 30px rgba(88,196,220,0.8), inset 0 0 20px rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24}}>⚡</div>
+        </div>
+
+        {/* VCG Title */}
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:22,fontWeight:900,color:'#ffd60a',letterSpacing:4,marginTop:40,animation:'vcgFade 0.6s ease-out',textShadow:'0 0 20px rgba(255,214,10,0.4)',textAlign:'center',padding:'0 20px'}}>
+          VIRTUAL COMMUNICATION GATEWAY
+        </div>
+
+        {/* Subtitle */}
+        <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:2,marginTop:6,animation:'vcgFade 0.8s ease-out'}}>
+          MI6228 · GROUP 13 · IEEE 2030.5
+        </div>
+
+        {/* Loading message with dots */}
+        <div style={{marginTop:40,display:'flex',alignItems:'center',gap:8,animation:'vcgFade 1s ease-out'}}>
+          <span style={{fontFamily:"'Share Tech Mono',monospace",fontSize:13,color:'#58c4dc'}}>{loadingMessage}</span>
+          <span style={{display:'flex',gap:3}}>
+            <span style={{width:4,height:4,borderRadius:'50%',background:'#58c4dc',animation:'vcgDots 1.4s ease-in-out infinite'}}/>
+            <span style={{width:4,height:4,borderRadius:'50%',background:'#58c4dc',animation:'vcgDots 1.4s ease-in-out 0.2s infinite'}}/>
+            <span style={{width:4,height:4,borderRadius:'50%',background:'#58c4dc',animation:'vcgDots 1.4s ease-in-out 0.4s infinite'}}/>
+          </span>
+        </div>
+
+        {/* Bottom status */}
+        <div style={{position:'absolute',bottom:30,fontFamily:"'Share Tech Mono',monospace",fontSize:9,color:'rgba(255,255,255,0.25)',letterSpacing:2,display:'flex',alignItems:'center',gap:8}}>
+          <span style={{width:6,height:6,borderRadius:'50%',background:'#10b981',boxShadow:'0 0 8px #10b981',animation:'vcgPulse 1.5s ease-in-out infinite'}}/>
+          ESTABLISHING SECURE CONNECTION
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{maxWidth:'100%',minHeight:'100vh',fontFamily:'Plus Jakarta Sans,sans-serif',background:T.bg,position:'relative',transition:'background 0.3s',display:'flex',flexDirection:'column'}}>
