@@ -70,7 +70,7 @@ interface Alert { id:string;block:string;type:string;message:string;severity:'hi
 interface HistoryEntry { time:string;block:string;generation:number;consumption:number;net:number;cost:number }
 interface Notification { id:string;title:string;message:string;type:'info'|'warning'|'error'|'success';time:string;read:boolean }
 interface SimReading { deviceId:string;type:string;block:string;power:number;voltage:number;temperature:number;timestamp:string;sent:boolean }
-type Screen = 'home'|'block'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'group12'|'methodology'|'trade'
+type Screen = 'home'|'block'|'alerts'|'demand'|'history'|'cost'|'devices'|'map'|'compare'|'register'|'import'|'settings'|'simulator'|'fiware'|'architecture'|'report'|'group12'|'methodology'|'trade'|'grid'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const makeSensors=(t=20,sol=600,bat=50,gi=1,ge=1,ws=25,ec=0.38,co2=2):Sensor[]=>[
@@ -787,7 +787,7 @@ export default function VCGApp() {
 
   const NAV=[
     {id:'home',    icon:'🏠',label:'Home'},
-    {id:'alerts',  icon:'⚠️',label:'Alerts',badge:unreadAlerts},
+    {id:'grid',    icon:'🎛️',label:'Grid'},
     {id:'trade',   icon:'💱',label:'Trade'},
     {id:'demand',  icon:'⚡',label:'Demand'},
     {id:'settings',icon:'⚙️',label:'More'},
@@ -1105,6 +1105,7 @@ export default function VCGApp() {
 }} cardStyle={cardStyle} ironBtn={ironBtn} />}
 
         {screen==='architecture' && <ArchitectureScreen T={T} blocks={blocks} apiOnline={apiOnline} cardStyle={cardStyle} darkMode={darkMode} />}
+        {screen==='grid' && <GridOperatorScreen T={T} blocks={blocks} setBlocks={setBlocks} devices={devices} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} goldBtn={goldBtn} markLocalChange={markLocalChange} saveAllToCloud={saveAllToCloud} sensors={sensors} />}
         {screen==='trade' && <TradeScreen T={T} blocks={blocks} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} goldBtn={goldBtn} />}
         {screen==='methodology' && <MethodologyScreen T={T} blocks={blocks} cardStyle={cardStyle} pill={pill} ironBtn={ironBtn} />}
         {screen==='report'    && <ReportScreen T={T} blocks={blocks} sensors={sensors} devices={devices} history={history} weatherData={weatherData} cardStyle={cardStyle} ironBtn={ironBtn} />}
@@ -1826,6 +1827,291 @@ function ChartsScreen({T,blocks,history,sensors,cardStyle,darkMode}:any) {
     </div>
   )
 }
+// ── GRID OPERATOR CONTROL PANEL ──────────────────────────────────────────
+function GridOperatorScreen({T,blocks,setBlocks,devices,cardStyle,pill,ironBtn,goldBtn,markLocalChange,saveAllToCloud,sensors}:any) {
+  const [commands,setCommands]=useState<any[]>([])
+  const [animatingBlock,setAnimatingBlock]=useState<string|null>(null)
+
+  // Calculate grid health
+  const totalGen=blocks.reduce((s:number,b:Block)=>s+b.generation,0)
+  const totalCon=blocks.reduce((s:number,b:Block)=>s+b.consumption,0)
+  const netBalance=totalGen-totalCon
+  const balancePct=totalCon>0?Math.min((totalGen/totalCon)*100,100):0
+  const stability=Math.max(70,Math.min(99,Math.round(100-Math.abs(netBalance)/5)))
+  const gridStatus=stability>=95?'Optimal':stability>=85?'Stable':'Stressed'
+  const statusColor=stability>=95?'#10b981':stability>=85?'#ffd60a':'#e63946'
+
+  // Frequency simulation (50 Hz ± small variance based on balance)
+  const frequency=(50+(netBalance>0?0.01:-0.01)*Math.random()).toFixed(2)
+  const voltage=(230+(netBalance>0?1:-1)*Math.random()).toFixed(0)
+
+  const logCommand=(action:string,target:string,detail:string)=>{
+    const cmd={
+      id:'CMD-'+Date.now().toString(36).toUpperCase(),
+      time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      action,target,detail,
+      status:'Executed',
+      protocol:'IEEE 2030.5'
+    }
+    setCommands((p:any)=>[cmd,...p.slice(0,9)])
+  }
+
+  const animateBlock=(id:string)=>{
+    setAnimatingBlock(id)
+    setTimeout(()=>setAnimatingBlock(null),1500)
+  }
+
+  // DER Control Actions
+  const curtailSolar=(b:Block,pct:number)=>{
+    markLocalChange()
+    const newGen=+(b.generation*(pct/100)).toFixed(1)
+    const newBlocks=blocks.map((x:Block)=>x.id===b.id?{...x,generation:newGen,net:+(newGen-x.consumption).toFixed(1),status:(newGen-x.consumption)>0?'Surplus':'Deficit' as any}:x)
+    setBlocks(newBlocks)
+    saveAllToCloud(newBlocks,devices,sensors)
+    logCommand('CURTAIL_SOLAR',b.name,`${b.generation.toFixed(1)} kW → ${newGen.toFixed(1)} kW (${pct}%)`)
+    animateBlock(b.id)
+  }
+
+  const forceBatteryDischarge=(b:Block)=>{
+    markLocalChange()
+    // Increase generation by 20% (simulating battery discharge)
+    const boost=+(b.generation*0.2).toFixed(1)
+    const newGen=+(b.generation+boost).toFixed(1)
+    const newBlocks=blocks.map((x:Block)=>x.id===b.id?{...x,generation:newGen,net:+(newGen-x.consumption).toFixed(1),status:(newGen-x.consumption)>0?'Surplus':'Deficit' as any}:x)
+    setBlocks(newBlocks)
+    saveAllToCloud(newBlocks,devices,sensors)
+    logCommand('BATTERY_DISCHARGE',b.name,`+${boost.toFixed(1)} kW injected`)
+    animateBlock(b.id)
+  }
+
+  const pauseLoads=(b:Block,pct:number)=>{
+    markLocalChange()
+    const newCon=+(b.consumption*(pct/100)).toFixed(1)
+    const newBlocks=blocks.map((x:Block)=>x.id===b.id?{...x,consumption:newCon,net:+(x.generation-newCon).toFixed(1),status:(x.generation-newCon)>0?'Surplus':'Deficit' as any}:x)
+    setBlocks(newBlocks)
+    saveAllToCloud(newBlocks,devices,sensors)
+    logCommand('LOAD_CURTAIL',b.name,`${b.consumption.toFixed(1)} kW → ${newCon.toFixed(1)} kW`)
+    animateBlock(b.id)
+  }
+
+  const resetBlock=(b:Block)=>{
+    // Reset to random "normal" values
+    markLocalChange()
+    const newGen=+(80+Math.random()*80).toFixed(1)
+    const newCon=+(70+Math.random()*70).toFixed(1)
+    const newBlocks=blocks.map((x:Block)=>x.id===b.id?{...x,generation:newGen,consumption:newCon,net:+(newGen-newCon).toFixed(1),status:(newGen-newCon)>0?'Surplus':'Deficit' as any}:x)
+    setBlocks(newBlocks)
+    saveAllToCloud(newBlocks,devices,sensors)
+    logCommand('RESET',b.name,`Restored to baseline operation`)
+    animateBlock(b.id)
+  }
+
+  const emergencyBlackStart=()=>{
+    if(!window.confirm('🚨 BLACK START PROCEDURE\n\nThis will restart all grid operations. Continue?')) return
+    markLocalChange()
+    const newBlocks=blocks.map((x:Block)=>{
+      const gen=+(100+Math.random()*50).toFixed(1)
+      const con=+(90+Math.random()*40).toFixed(1)
+      return{...x,generation:gen,consumption:con,net:+(gen-con).toFixed(1),status:(gen-con)>0?'Surplus':'Deficit' as any}
+    })
+    setBlocks(newBlocks)
+    saveAllToCloud(newBlocks,devices,sensors)
+    logCommand('BLACK_START','ALL BLOCKS','Full grid restart sequence initiated')
+  }
+
+  const balanceGrid=()=>{
+    markLocalChange()
+    // Auto-balance: make everything equal
+    const avgCon=blocks.reduce((s:number,b:Block)=>s+b.consumption,0)/blocks.length
+    const newBlocks=blocks.map((x:Block)=>{
+      const gen=+(avgCon*1.05).toFixed(1)  // slight surplus for stability
+      return{...x,generation:gen,net:+(gen-x.consumption).toFixed(1),status:(gen-x.consumption)>0?'Surplus':'Deficit' as any}
+    })
+    setBlocks(newBlocks)
+    saveAllToCloud(newBlocks,devices,sensors)
+    logCommand('AUTO_BALANCE','ALL BLOCKS','Grid balanced to optimal stability')
+  }
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      {/* Header */}
+      <div style={{...cardStyle({background:'linear-gradient(135deg,#0d1117,#0a1a2e)',border:'none'})}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,color:'#06b6d4'}}>🎛️ Grid Operator Control</div>
+            <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>
+              Real-time DER management · IEEE 2030.5
+            </div>
+          </div>
+          <div style={{padding:'6px 12px',borderRadius:20,background:statusColor+'20',border:`1px solid ${statusColor}40`}}>
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <span style={{width:8,height:8,borderRadius:'50%',background:statusColor,boxShadow:`0 0 6px ${statusColor}`,animation:'pulse2 1.5s ease-in-out infinite'}}/>
+              <span style={{fontSize:11,fontWeight:800,color:statusColor,letterSpacing:1}}>{gridStatus.toUpperCase()}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid Health Metrics */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12}}>📊 Grid Health</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:12}}>
+          <div style={{padding:10,background:T.bg,borderRadius:10,textAlign:'center',border:`1px solid ${T.border}`}}>
+            <div style={{fontSize:9,color:T.text3,letterSpacing:1}}>STABILITY</div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:900,color:statusColor,marginTop:4}}>{stability}%</div>
+            <div style={{height:3,background:T.border,borderRadius:2,marginTop:6,overflow:'hidden'}}>
+              <div style={{height:'100%',width:stability+'%',background:statusColor,transition:'width 0.6s ease'}}/>
+            </div>
+          </div>
+          <div style={{padding:10,background:T.bg,borderRadius:10,textAlign:'center',border:`1px solid ${T.border}`}}>
+            <div style={{fontSize:9,color:T.text3,letterSpacing:1}}>FREQUENCY</div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:900,color:'#58c4dc',marginTop:4}}>{frequency}</div>
+            <div style={{fontSize:9,color:T.text3,marginTop:2}}>Hz · Target: 50.00</div>
+          </div>
+          <div style={{padding:10,background:T.bg,borderRadius:10,textAlign:'center',border:`1px solid ${T.border}`}}>
+            <div style={{fontSize:9,color:T.text3,letterSpacing:1}}>VOLTAGE</div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:900,color:'#ffd60a',marginTop:4}}>{voltage}</div>
+            <div style={{fontSize:9,color:T.text3,marginTop:2}}>V · Target: 230</div>
+          </div>
+        </div>
+
+        {/* Gen vs Con bar */}
+        <div style={{marginBottom:8}}>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:T.text3,marginBottom:4}}>
+            <span>Generation: {totalGen.toFixed(1)} kW</span>
+            <span>Consumption: {totalCon.toFixed(1)} kW</span>
+          </div>
+          <div style={{height:10,background:T.bg,borderRadius:5,overflow:'hidden',position:'relative'}}>
+            <div style={{position:'absolute',inset:0,width:balancePct+'%',background:`linear-gradient(90deg,#10b981,#34d399)`,transition:'width 0.8s ease'}}/>
+          </div>
+          <div style={{textAlign:'center',marginTop:6,fontSize:12,fontWeight:800,color:netBalance>=0?'#10b981':'#e63946'}}>
+            Net: {netBalance>=0?'+':''}{netBalance.toFixed(1)} kW {netBalance>=0?'surplus':'deficit'}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12}}>⚡ Quick Actions</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          <button onClick={balanceGrid} style={{padding:'12px',background:'linear-gradient(135deg,#10b981,#059669)',border:'none',borderRadius:10,color:'#fff',fontWeight:800,fontSize:13,cursor:'pointer',boxShadow:'0 4px 12px rgba(16,185,129,0.3)'}}>
+            ⚖️ Auto-Balance Grid
+          </button>
+          <button onClick={emergencyBlackStart} style={{padding:'12px',background:'linear-gradient(135deg,#e63946,#c1121f)',border:'none',borderRadius:10,color:'#fff',fontWeight:800,fontSize:13,cursor:'pointer',boxShadow:'0 4px 12px rgba(230,57,70,0.3)'}}>
+            🚨 Black Start
+          </button>
+        </div>
+      </div>
+
+      {/* DER Control Panel per block */}
+      <div style={cardStyle()}>
+        <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12}}>🎛️ DER Controls</div>
+        {blocks.length===0?(
+          <div style={{textAlign:'center',padding:'30px 20px'}}>
+            <div style={{fontSize:36,marginBottom:10}}>🔌</div>
+            <div style={{fontSize:13,color:T.text2}}>No communities connected</div>
+            <div style={{fontSize:11,color:T.text3,marginTop:4}}>Add or import a community first</div>
+          </div>
+        ):(
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {blocks.map((b:Block)=>{
+              const isAnim=animatingBlock===b.id
+              return(
+                <div key={b.id} style={{
+                  padding:12,
+                  background:isAnim?'rgba(255,214,10,0.08)':T.bg,
+                  borderRadius:12,
+                  border:`2px solid ${isAnim?'#ffd60a':T.border}`,
+                  transition:'all 0.3s ease',
+                  transform:isAnim?'scale(1.02)':'scale(1)',
+                }}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{fontSize:20}}>{b.emoji}</span>
+                      <div>
+                        <div style={{fontWeight:800,fontSize:13,color:T.text}}>{b.name}</div>
+                        <div style={{fontSize:10,color:T.text3}}>{b.location}</div>
+                      </div>
+                    </div>
+                    <div style={pill(b.status==='Surplus'?T.green:b.status==='Deficit'?T.red:T.arc)}>
+                      {b.status}
+                    </div>
+                  </div>
+
+                  {/* Current values */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginBottom:10}}>
+                    <div style={{padding:'6px 8px',background:T.bg,borderRadius:8,textAlign:'center',border:`1px solid ${T.border}`}}>
+                      <div style={{fontSize:9,color:T.text3}}>GEN</div>
+                      <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:800,color:'#10b981'}}>{b.generation.toFixed(1)}</div>
+                    </div>
+                    <div style={{padding:'6px 8px',background:T.bg,borderRadius:8,textAlign:'center',border:`1px solid ${T.border}`}}>
+                      <div style={{fontSize:9,color:T.text3}}>CON</div>
+                      <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:800,color:'#f59e0b'}}>{b.consumption.toFixed(1)}</div>
+                    </div>
+                    <div style={{padding:'6px 8px',background:T.bg,borderRadius:8,textAlign:'center',border:`1px solid ${T.border}`}}>
+                      <div style={{fontSize:9,color:T.text3}}>NET</div>
+                      <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:800,color:b.net>=0?'#10b981':'#e63946'}}>{b.net>=0?'+':''}{b.net.toFixed(1)}</div>
+                    </div>
+                  </div>
+
+                  {/* Control buttons */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                    <button onClick={()=>curtailSolar(b,50)} style={{padding:'8px',background:'rgba(255,214,10,0.1)',border:'1px solid rgba(255,214,10,0.3)',borderRadius:8,color:'#ffd60a',fontWeight:700,fontSize:11,cursor:'pointer'}}>
+                      ☀️ Curtail 50%
+                    </button>
+                    <button onClick={()=>forceBatteryDischarge(b)} style={{padding:'8px',background:'rgba(88,196,220,0.1)',border:'1px solid rgba(88,196,220,0.3)',borderRadius:8,color:'#58c4dc',fontWeight:700,fontSize:11,cursor:'pointer'}}>
+                      🔋 Battery Boost
+                    </button>
+                    <button onClick={()=>pauseLoads(b,70)} style={{padding:'8px',background:'rgba(230,57,70,0.1)',border:'1px solid rgba(230,57,70,0.3)',borderRadius:8,color:'#e63946',fontWeight:700,fontSize:11,cursor:'pointer'}}>
+                      ⏸️ Reduce Load 30%
+                    </button>
+                    <button onClick={()=>resetBlock(b)} style={{padding:'8px',background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)',borderRadius:8,color:'#10b981',fontWeight:700,fontSize:11,cursor:'pointer'}}>
+                      🔄 Reset Block
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Command Log */}
+      {commands.length>0&&(
+        <div style={cardStyle()}>
+          <div style={{fontWeight:800,fontSize:13,color:T.text,marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+            📜 Command Log
+            <span style={{padding:'2px 8px',background:'rgba(6,182,212,0.15)',borderRadius:20,fontSize:10,color:'#06b6d4',fontWeight:700}}>{commands.length} commands</span>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            {commands.map((c:any)=>(
+              <div key={c.id} style={{padding:10,background:T.bg,borderRadius:8,border:`1px solid ${T.border}`,fontFamily:"'Share Tech Mono',monospace"}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                  <span style={{fontSize:10,color:'#10b981',fontWeight:800}}>✓ {c.action}</span>
+                  <span style={{fontSize:9,color:T.text3}}>{c.time}</span>
+                </div>
+                <div style={{fontSize:11,color:T.text,marginBottom:2}}>{c.target}</div>
+                <div style={{fontSize:10,color:T.text3}}>{c.detail}</div>
+                <div style={{display:'flex',justifyContent:'space-between',marginTop:4}}>
+                  <span style={{fontSize:9,color:'#06b6d4'}}>{c.protocol}</span>
+                  <span style={{fontSize:9,color:T.text3}}>{c.id}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Info footer */}
+      <div style={{padding:12,background:'rgba(6,182,212,0.05)',borderRadius:10,border:'1px solid rgba(6,182,212,0.2)'}}>
+        <div style={{fontSize:11,color:T.text2,lineHeight:1.5}}>
+          <strong style={{color:'#06b6d4'}}>IEEE 2030.5 Operator Controls:</strong> Commands are dispatched via the VCG API to connected DERs. In production, these reach smart inverters, batteries and EV chargers within 2 seconds via the IEEE 2030.5 REST protocol.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── P2P ENERGY TRADING SCREEN ────────────────────────────────────────────
 function TradeScreen({T,blocks,cardStyle,pill,ironBtn,goldBtn}:any) {
   const [trades,setTrades]=useState<any[]>([])
@@ -4138,6 +4424,7 @@ function SettingsScreen({T,apiOnline,apiMsg,onRefresh,onShowQR,onNavigate,onStar
 
   const MORE=[
     {icon:'🏗️',label:'Architecture', s:'architecture',c:'#ffd60a'},
+    {icon:'⚠️',label:'Alerts',       s:'alerts',      c:'#f59e0b'},
     {icon:'📐',label:'Methodology',  s:'methodology', c:'#8b5cf6'},
     {icon:'📄',label:'PDF Report',   s:'report',      c:'#e63946'},
     {icon:'🎬',label:'Demo Mode',    s:'demo',        c:'#ffd60a'},
